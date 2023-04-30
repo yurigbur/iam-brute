@@ -43,6 +43,7 @@ def parse_arguments():
     parser.add_argument('--secret-key', help='AWS secret key', required=True)
     parser.add_argument('--session-token', help='STS session token', default=None)
     parser.add_argument('--services', nargs='+', help='Space-sepearated list of services to enumerate', default=None) 
+    parser.add_argument('--silent', help='If set, only verified permissions are printed', action='store_true', default=False)
 
     return parser.parse_args()
 
@@ -50,7 +51,12 @@ def parse_arguments():
 def get_parameter(param_name, service):
     # Heuristical approach to choose a type of format that is required based on the parameter name
     if "arn" in param_name.lower():
-        return f"arn:aws:{service}:{REGION}:000000000000:foobar"
+        if "policy" in param_name.lower():
+            return "arn:aws:iam::aws:policy/foobar"
+        elif "role" in param_name.lower():
+            return "arn:aws:iam::000000000000:role/foobar"
+        else:
+            return f"arn:aws:{service}:{REGION}:000000000000:foobar"
     if "version" in param_name.lower():
         return "v123456789"
     if param_name.lower().endswith("list") or param_name.lower().endswith("ids"):
@@ -67,7 +73,7 @@ def get_parameter(param_name, service):
         return "ABCDEFGHIJKLMNOPQRSTUVWXYZ" 
 
 
-def enumerate_permissions(ak, sk, st, services):
+def enumerate_permissions(ak, sk, st, services, silent):
     
     session = None
     if st == None:
@@ -114,15 +120,21 @@ def enumerate_permissions(ak, sk, st, services):
                         prams_needed = False
                         if "AccessDenied" in str(client_error):
                             continue
+                        elif "InvalidInput" in str(client_error) or "ValidationError" in str(client_error):
+                            if not silent:
+                                print(f"[!] Cannot determine correct parameter format for {service}.{action}\n")
+                                print(client_error)
+                                print("")
+                            continue
                     except botocore.exceptions.ParamValidationError as param_validation_error:
-                        #Param validation fails before auth check. Actions that are listed here might still be allowed.
-                        print(f"[!] Cannot determine correct parameters for {service}.{action}\n")
-                        print(param_validation_error)
-                        print("")
+                        if not silent:
+                            print(f"[!] Cannot determine correct parameters for {service}.{action}\n")
+                            print(param_validation_error)
+                            print("")
                         continue 
-                    except:
+                    except Exception as ie:
                         continue #Might miss some unknown errors. E.g. some endpoint connection errors
-                except:
+                except Exception as oe:
                     continue
                 print(f"[+] {service}.{action}")
                 if params_needed: 
@@ -134,9 +146,9 @@ def enumerate_permissions(ak, sk, st, services):
 
 def main():
     args = parse_arguments()
-
+    
     print(BANNER)
-    enumerate_permissions(args.access_key, args.secret_key, args.session_token, args.services)
+    enumerate_permissions(args.access_key, args.secret_key, args.session_token, args.services, args.silent)
 
 
 if __name__ == '__main__':
