@@ -15,8 +15,28 @@ python iam-brute.py --access-key AKIA... --secret-key ...
 python iam-brute.py --access-key ASIA... --secret-key ... --session-token ey...
 ```
 
-- By default, the tool enumerates over all services and permissions that are available in boto3. The flag `--services` expects a space-separated list and limits the enumeration to the specified services.
-- By default, the tool warns about permissions that could not be verified because the parameter validation failed. This behavior can be turned of with the `--silent` flag. 
+Refer to the help menu for further flags
+```bash
+$ python3 iam-brute.py -h                                                                                                             
+usage: iam-brute.py [-h] --access-key ACCESS_KEY --secret-key SECRET_KEY [--session-token SESSION_TOKEN] [--services SERVICES [SERVICES ...]] [--silent]
+                    [--threads THREADS]
+
+IAM Brute
+
+options:
+  -h, --help            show this help message and exit
+  --access-key ACCESS_KEY
+                        AWS access key
+  --secret-key SECRET_KEY
+                        AWS secret key
+  --session-token SESSION_TOKEN
+                        STS session token
+  --services SERVICES [SERVICES ...]
+                        Space-sepearated list of services to enumerate
+  --silent              If set, only verified permissions are printed
+  --threads THREADS     Number of threads (Default 25)
+
+```
 
 ## Disclaimer
 I started writing this tool as I was frustrated with the coverage and maintenance state of other well known aws iam enumeration tools like enumerate-iam and weirdAAL. I am not a developer and I work on this with a very limted time budget. Therefore, you should not expect the script to be performant.
@@ -24,4 +44,5 @@ I started writing this tool as I was frustrated with the coverage and maintenanc
 ### Roadmap / Ideas
 - Include permissions besides get, list and describe with dry-runs if available
 - Increase the dynamic parameter generation success rate by identifying re-occuring patterns and use fitting dummy parameters. 
-- Multi-threading  
+- Improve multi-threading exception handling
+- Write watcher that kills hanging threads.
