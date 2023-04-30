@@ -2,6 +2,7 @@
 import argparse
 import botocore
 import boto3
+import datetime
 
 REGION = "us-east-1"
 
@@ -46,6 +47,26 @@ def parse_arguments():
     return parser.parse_args()
 
 
+def get_parameter(param_name, service):
+    # Heuristical approach to choose a type of format that is required based on the parameter name
+    if "arn" in param_name.lower():
+        return f"arn:aws:{service}:{REGION}:000000000000:foobar"
+    if "version" in param_name.lower():
+        return "v123456789"
+    if param_name.lower().endswith("list") or param_name.lower().endswith("ids"):
+        return ["foo","bar"]
+    if "JobId" in param_name:
+        return "deadbeef-dead-beef-dead-beefdeadbeef"
+    if "time" in param_name.lower():
+        return datetime.datetime.now()
+    if "MaxResults" in param_name or "MaxEntries" in param_name:
+        return 42
+    if param_name.lower().endswith("count"):
+        return 42
+    else:
+        return "ABCDEFGHIJKLMNOPQRSTUVWXYZ" 
+
+
 def enumerate_permissions(ak, sk, st, services):
     
     session = None
@@ -72,18 +93,19 @@ def enumerate_permissions(ak, sk, st, services):
         actions = filter(lambda action: not (action.startswith("__") or action.startswith("_")), dir(client))
         params_needed = False
         for action in actions:
-            if "get" in action or "list" in action or "describe" in action:
+            if action.startswith("get_") or action.startswith("list_") or action.startswith("describe_"):
                 try:
                     method = getattr(client, action)
                     method()
                 except KeyboardInterrupt:
                     exit()
                 except botocore.exceptions.ParamValidationError as param_error:
-                    parameter_list = str(param_error).split("\n")[1:]
+                    parameter_error_list = str(param_error).split("\n")[1:]
                     parameter_dict = dict()
                     params_needed = True
-                    for param in parameter_list:
-                        parameter_dict[param[38:-1]] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ" # Some random string for now.
+                    for param_error_text in parameter_error_list:
+                        param_name = param_error_text[38:-1] 
+                        parameter_dict[param_name] = get_parameter(param_name, service) 
                     try:
                         method(**parameter_dict)
                     except KeyboardInterrupt:
@@ -95,6 +117,8 @@ def enumerate_permissions(ak, sk, st, services):
                     except botocore.exceptions.ParamValidationError as param_validation_error:
                         #Param validation fails before auth check. Actions that are listed here might still be allowed.
                         print(f"[!] Cannot determine correct parameters for {service}.{action}\n")
+                        print(param_validation_error)
+                        print("")
                         continue 
                     except:
                         continue #Might miss some unknown errors. E.g. some endpoint connection errors
