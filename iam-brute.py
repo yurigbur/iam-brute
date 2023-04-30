@@ -166,7 +166,7 @@ def enumerate_permissions(ak, sk, st, services):
     # Generate a list of service and action tuples for all list, get and describe actions
     to_test = []
     for service in services:
-        client = boto3.client(service)
+        client = boto3.client(service,region_name=REGION)
         actions = filter(lambda action: not (action.startswith("__") or action.startswith("_")), dir(client))
         for action in actions:
             if action.startswith("get_") or action.startswith("list_") or action.startswith("describe_"):
