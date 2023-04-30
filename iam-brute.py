@@ -47,12 +47,6 @@ def parse_arguments():
 
 
 def enumerate_permissions(ak, sk, st, services):
-    # OLD WAY:
-    # tmp_loader = botocore.loaders.Loader()
-    # services = tmp_loader.list_available_services("service-2")
-    # Not entirely sure what this service-2 exactly is. there are also other options like paginators-1 and waiters-2.json.
-    # Another option could be to get the services from botocore/data/endpoints.json but it seems to contain less services.
-    # Example: cat endpoints.json | jq -r '.partitions[].services | keys | .[]' | sort -u
     
     session = None
     if st == None:
@@ -76,6 +70,7 @@ def enumerate_permissions(ak, sk, st, services):
     for service in services:
         client = session.client(service)
         actions = filter(lambda action: not (action.startswith("__") or action.startswith("_")), dir(client))
+        params_needed = False
         for action in actions:
             if "get" in action or "list" in action or "describe" in action:
                 try:
@@ -83,9 +78,33 @@ def enumerate_permissions(ak, sk, st, services):
                     method()
                 except KeyboardInterrupt:
                     exit()
+                except botocore.exceptions.ParamValidationError as param_error:
+                    parameter_list = str(param_error).split("\n")[1:]
+                    parameter_dict = dict()
+                    params_needed = True
+                    for param in parameter_list:
+                        parameter_dict[param[38:-1]] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ" # Some random string for now.
+                    try:
+                        method(**parameter_dict)
+                    except KeyboardInterrupt:
+                        exit()
+                    except botocore.exceptions.ClientError as client_error:
+                        prams_needed = False
+                        if "AccessDenied" in str(client_error):
+                            continue
+                    except botocore.exceptions.ParamValidationError as param_validation_error:
+                        #Param validation fails before auth check. Actions that are listed here might still be allowed.
+                        print(f"[!] Cannot determine correct parameters for {service}.{action}\n")
+                        continue 
+                    except:
+                        continue #Might miss some unknown errors. E.g. some endpoint connection errors
                 except:
                     continue
-                print(f"{service}.{action}")
+                print(f"[+] {service}.{action}")
+                if params_needed: 
+                    print(f" |--Parameters: {', '.join(parameter_dict.keys())}")
+                print("")
+                params_needed = False
                 
 
 
