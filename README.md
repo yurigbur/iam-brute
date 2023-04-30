@@ -38,6 +38,11 @@ options:
 
 ```
 
+### Docker
+```bash
+sudo docker run -it yukonsec/iam-brute 
+```
+
 ## Disclaimer
 I started writing this tool as I was frustrated with the coverage and maintenance state of other well known aws iam enumeration tools like enumerate-iam and weirdAAL. I am not a developer and I work on this with a very limted time budget. Therefore, you should not expect the script to be performant.
 
