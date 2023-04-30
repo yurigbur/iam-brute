@@ -1,5 +1,4 @@
-base64
-json
 boto3
 botocore
-datetime
+multiprocessing
+itertools
