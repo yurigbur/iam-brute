@@ -5,6 +5,7 @@ import botocore
 import boto3
 import datetime
 import multiprocessing
+import re
 
 from multiprocessing import Pool
 from itertools import repeat
@@ -12,6 +13,9 @@ from itertools import repeat
 THREADS = 25
 REGION = "us-east-1"
 VERBOSE = "warning"
+
+# The following services produce inaccurate results as certain errors are currently not captured.
+EXCLUDED_SERVICES = ["alexaforbusiness", "chime", "cloud9", "cloudfront", "cloudtrail", "codecommit", "cognito-idp", "comprehend", "elasticbeanstalk", "fsx", "kinesis", "kinesis-video-signaling", "kms", "license-manager", "logs", "redshift-serverless", "resource-explorer-2", "route53", "sdb", "service-quotas", "sqs", "sso", "transcribe", "transfer", "waf", "waf-regional", "wafv2", "workdocs", "workspaces"]
 
 BANNER = """
   _____            __  __   ____  _____  _    _ _______ ______   _ 
@@ -52,6 +56,7 @@ def parse_arguments():
     parser.add_argument('--services', nargs='+', help='Space-sepearated list of services to enumerate', default=None) 
     parser.add_argument('--verbose', help='Sets the level of information the script prints: "silent" only prints confirmed permissions, "warning" (default) prints parameter parsing errors and "debug" prints all errors', choices=["silent","warning","debug"], default="warning")
     parser.add_argument('--threads', help='Number of threads (Default 25)', type=int, default=25)
+    parser.add_argument('--no-banner', help='Hides banner', action="store_true", default=False)
 
     return parser.parse_args()
 
@@ -77,6 +82,10 @@ def get_parameter(param_name, service):
         return 42
     if param_name.lower().endswith("count"):
         return 42
+    if "InstanceId" in param_name:
+        return "i-deadbeefdeadbeefd"
+    if "repositoryName" in param_name:
+        return f"11122233334444.dkr.ecr.{REGION}.amazonaws.com/foobar"
     else:
         return "ABCDEFGHIJKLMNOPQRSTUVWXYZ" 
 
@@ -108,15 +117,30 @@ def check_permission(service, action, ak, sk, st):
         except KeyboardInterrupt:
             exit()
         except botocore.exceptions.ClientError as client_error:
-            if "AccessDenied" in str(client_error):
+            if "AccessDenied" in str(client_error) or "UnauthorizedOperation" in str(client_error) or "ForbiddenException" in str(client_error):
                 return
-            elif "InvalidInput" in str(client_error) or "ValidationError" in str(client_error):
+            elif "NoSuchBucket" in str(client_error):
+                return
+            elif re.compile(r"Invalid(Input|Request|ParameterValue)|Validation(Error|Exception)").search(str(client_error)):
                 if VERBOSE in ["warning", "debug"]:
-                    print(f"[!] Cannot determine correct parameter format for {service}.{action}\n{str(client_error)}\n")
+                    print(f"[!] Cannot determine correct input for {service}.{action}\n{str(client_error)}\n")
                 return
+            elif re.compile(r"Invalid.*I(d|D)").search(str(client_error)):
+                if VERBOSE in ["warning", "debug"]:
+                    print(f"[!] Cannot determine correct ID for {service}.{action}\n{str(client_error)}\n")
+                return
+            elif re.compile(r"Invalid.*A(rn|RN)").search(str(client_error)):
+                if VERBOSE in ["warning", "debug"]:
+                    print(f"[!] Cannot determine correct Arn for {service}.{action}\n{str(client_error)}\n")
+                return
+            elif "BadRequestException" in str(client_error):
+                if VERBOSE in ["warning", "debug"]:
+                    print(f"[!] Bad request send for {service}.{action}. Parameters likely have invalid format\n{str(client_error)}\n")
+                return
+
         except botocore.exceptions.ParamValidationError as param_validation_error:
             if VERBOSE in ["warning", "debug"]:
-                print(f"[!] Cannot determine correct parameters for {service}.{action}\n{str(param_validation_error)}\n")
+                print(f"[!] Cannot determine correct parameter format for {service}.{action}\n{str(param_validation_error)}\n")
             return
         except Exception as ie:
             if VERBOSE == "debug":
@@ -154,6 +178,9 @@ def enumerate_permissions(ak, sk, st, services):
         print("[!] Unknown services specified")
         exit()
 
+    # remove excluded services
+    services = [x for x in services if x not in EXCLUDED_SERVICES]
+
     # Generate a list of service and action tuples for all list, get and describe actions
     to_test = []
     for service in services:
@@ -186,7 +213,9 @@ def main():
     VERBOSE = args.verbose
     THREADS = args.threads
     
-    print(BANNER)
+    if not args.no_banner: 
+        print(BANNER)
+    
     enumerate_permissions(args.access_key, args.secret_key, args.session_token, args.services)
 
 
