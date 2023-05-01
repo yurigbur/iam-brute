@@ -17,9 +17,9 @@ python iam-brute.py --access-key ASIA... --secret-key ... --session-token ey...
 
 Refer to the help menu for further flags
 ```bash
-$ python3 iam-brute.py -h                                                                                                                      
+$ python3 iam-brute.py -h                                                                                                                     
 usage: iam-brute.py [-h] --access-key ACCESS_KEY --secret-key SECRET_KEY [--session-token SESSION_TOKEN] [--services SERVICES [SERVICES ...]]
-                    [--verbose {silent,warning,debug}] [--threads THREADS]
+                    [--verbose {silent,warning,debug}] [--threads THREADS] [--no-banner]
 
 IAM Brute
 
@@ -37,7 +37,10 @@ options:
                         Sets the level of information the script prints: "silent" only prints confirmed permissions, "warning" (default) prints parameter
                         parsing errors and "debug" prints all errors
   --threads THREADS     Number of threads (Default 25)
+  --no-banner           Hides banner
 ```
+
+**Review the EXCLUDED_SERVICE variable, it may contain services that you are looking for**
 
 ### Docker
 ```bash
