@@ -4,13 +4,14 @@ import argparse
 import botocore
 import boto3
 import datetime
+import multiprocessing
 
 from multiprocessing import Pool
 from itertools import repeat
 
 THREADS = 25
 REGION = "us-east-1"
-SILENT = False
+VERBOSE = "warning"
 
 BANNER = """
   _____            __  __   ____  _____  _    _ _______ ______   _ 
@@ -49,7 +50,7 @@ def parse_arguments():
     parser.add_argument('--secret-key', help='AWS secret key', required=True)
     parser.add_argument('--session-token', help='STS session token', default=None)
     parser.add_argument('--services', nargs='+', help='Space-sepearated list of services to enumerate', default=None) 
-    parser.add_argument('--silent', help='If set, only verified permissions are printed', action='store_true', default=False)
+    parser.add_argument('--verbose', help='Sets the level of information the script prints: "silent" only prints confirmed permissions, "warning" (default) prints parameter parsing errors and "debug" prints all errors', choices=["silent","warning","debug"], default="warning")
     parser.add_argument('--threads', help='Number of threads (Default 25)', type=int, default=25)
 
     return parser.parse_args()
@@ -83,20 +84,9 @@ def get_parameter(param_name, service):
 def check_permission(service, action, ak, sk, st):
     client = None
     if st == None:
-        client = boto3.client(
-                service,
-                aws_access_key_id=ak,
-                aws_secret_access_key=sk,
-                region_name=REGION
-        )
+        client = boto3.client(service, aws_access_key_id=ak, aws_secret_access_key=sk, region_name=REGION)
     else:
-        client = boto3.client(
-                service,
-                aws_access_key_id=ak,
-                aws_secret_access_key=sk,
-                aws_session_token=st,
-                region_name=REGION
-        )
+        client = boto3.client(service, aws_access_key_id=ak, aws_secret_access_key=sk, aws_session_token=st, region_name=REGION)
 
     params_needed = False
     try:
@@ -105,13 +95,15 @@ def check_permission(service, action, ak, sk, st):
     except KeyboardInterrupt:
         exit()
     except botocore.exceptions.ParamValidationError as param_error:
-        parameter_error_list = str(param_error).split("\n")[1:]
-        parameter_dict = dict()
-        params_needed = True
-        for param_error_text in parameter_error_list:
-            param_name = param_error_text[38:-1] 
-            parameter_dict[param_name] = get_parameter(param_name, service) 
         try:
+            parameter_error_list = str(param_error).split("\n")[1:]
+            parameter_dict = dict()
+            params_needed = True
+            
+            for param_error_text in parameter_error_list:
+                param_name = param_error_text[38:-1] 
+                parameter_dict[param_name] = get_parameter(param_name, service) 
+            
             method(**parameter_dict)
         except KeyboardInterrupt:
             exit()
@@ -119,25 +111,24 @@ def check_permission(service, action, ak, sk, st):
             if "AccessDenied" in str(client_error):
                 return
             elif "InvalidInput" in str(client_error) or "ValidationError" in str(client_error):
-                if not SILENT:
-                    print(f"[!] Cannot determine correct parameter format for {service}.{action}\n")
-                    print(client_error)
-                    print("")
+                if VERBOSE in ["warning", "debug"]:
+                    print(f"[!] Cannot determine correct parameter format for {service}.{action}\n{str(client_error)}\n")
                 return
         except botocore.exceptions.ParamValidationError as param_validation_error:
-            if not SILENT:
-                print(f"[!] Cannot determine correct parameters for {service}.{action}\n")
-                print(param_validation_error)
-                print("")
+            if VERBOSE in ["warning", "debug"]:
+                print(f"[!] Cannot determine correct parameters for {service}.{action}\n{str(param_validation_error)}\n")
             return
         except Exception as ie:
-            return #Might miss some unknown errors. E.g. some endpoint connection errors
+            if VERBOSE == "debug":
+                print(f"[!] Unknown error for {service}.{action}\n{str(ie)}\n")
+            return
     except Exception as oe:
+        if VERBOSE == "debug":
+            print(f"[!] Unknown error for {service}.{action}\n{str(oe)}\n")
         return
-    print(f"[+] {service}.{action}")
-    if params_needed: 
-        print(f" |--Parameters: {', '.join(parameter_dict.keys())}")
-    print("")
+
+    params = ("(" + ', '.join(parameter_dict.keys()) + ")") if params_needed else ""
+    print(f"[+] {service}.{action}: {params}")
 
 
 def enumerate_permissions(ak, sk, st, services):
@@ -170,26 +161,29 @@ def enumerate_permissions(ak, sk, st, services):
         actions = filter(lambda action: not (action.startswith("__") or action.startswith("_")), dir(client))
         for action in actions:
             if action.startswith("get_") or action.startswith("list_") or action.startswith("describe_"):
-                to_test.append((service,action,ak,sk,st))
+                if not (action == "get_paginator" or action == "get_waiter"):
+                    to_test.append((service,action,ak,sk,st))
                 
     print(f"[*] Checking {len(to_test)} permissions\n")
 
     thread_pool = Pool(THREADS)
 
     try:
-        thread_pool.starmap(check_permission, to_test)
+        results = thread_pool.starmap(check_permission, to_test)
     except KeyboardInterrupt:
         print("[*] Keyboard Interrupt detected, exiting!")
-        exit()
-
-    thread_pool.close()
-    thread_pool.join()
-
+    finally:
+        try:
+            thread_pool.close()
+            thread_pool.join()
+        except:
+            print("[!] Threads not shutting down nicely, exiting hard")
+    
 
 def main():
     args = parse_arguments()
-    global SILENT, THREADS
-    SILENT = args.silent
+    global VERBOSE, THREADS
+    VERBOSE = args.verbose
     THREADS = args.threads
     
     print(BANNER)
