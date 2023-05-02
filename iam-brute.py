@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import os
 import argparse
 import botocore
 import boto3
@@ -50,15 +51,31 @@ d', ,ri.~~-~.ri , +h
 def parse_arguments():
     parser = argparse.ArgumentParser(description='IAM Brute')
 
-    parser.add_argument('--access-key', help='AWS access key', required=True)
-    parser.add_argument('--secret-key', help='AWS secret key', required=True)
+    parser.add_argument('--profile', help='AWS CLI profile, using a profile explicitly will ignore --access-key and --secret-key', default=None)
+    parser.add_argument('--access-key', help='AWS access key', default=None)
+    parser.add_argument('--secret-key', help='AWS secret key', default=None)
     parser.add_argument('--session-token', help='STS session token', default=None)
     parser.add_argument('--services', nargs='+', help='Space-sepearated list of services to enumerate', default=None) 
     parser.add_argument('--verbose', help='Sets the level of information the script prints: "silent" only prints confirmed permissions, "warning" (default) prints parameter parsing errors and "debug" prints all errors', choices=["silent","warning","debug"], default="warning")
     parser.add_argument('--threads', help='Number of threads (Default 25)', type=int, default=25)
     parser.add_argument('--no-banner', help='Hides banner', action="store_true", default=False)
 
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    if args.profile and args.access_key:
+        print("[!] Access key and profile used")
+        exit()
+    if args.access_key and not args.secret_key:
+        print("[!] Access key used without secret key")
+        exit()
+    if args.secret_key and not args.access_key:
+        print("[!] Secret key provided without access key")
+        exit()
+    if args.session_token and not args.access_key and not args.secret_key:
+        print("[!] Session token without access key and secret key provided")
+        exit()
+
+    return args
 
 
 def get_parameter(param_name, service):
@@ -88,15 +105,27 @@ def get_parameter(param_name, service):
         return f"11122233334444.dkr.ecr.{REGION}.amazonaws.com/foobar"
     else:
         return "ABCDEFGHIJKLMNOPQRSTUVWXYZ" 
+    
 
+def get_client(service, profile, ak, sk, st):
 
-def check_permission(service, action, ak, sk, st):
-    client = None
-    if st == None:
-        client = boto3.client(service, aws_access_key_id=ak, aws_secret_access_key=sk, region_name=REGION)
+    if profile:
+        # Workaround via the environment variable as clients without a session do not support profile names as parameters.
+        os.environ["AWS_PROFILE"]=profile
+        return boto3.client(service, region_name=REGION)
+    elif ak:
+        if not st:
+            return boto3.client(service, aws_access_key_id=ak, aws_secret_access_key=sk, region_name=REGION)
+        else:
+            return boto3.client(service, aws_access_key_id=ak, aws_secret_access_key=sk, aws_session_token=st, region_name=REGION)
     else:
-        client = boto3.client(service, aws_access_key_id=ak, aws_secret_access_key=sk, aws_session_token=st, region_name=REGION)
+        os.environ["AWS_PROFILE"]="default"
+        return boto3.client(service, region_name=REGION)
 
+
+def check_permission(service, action, profile, ak, sk, st):
+
+    client = get_client(service, profile, ak, sk, st)
     params_needed = False
     try:
         method = getattr(client, action)
@@ -155,13 +184,10 @@ def check_permission(service, action, ak, sk, st):
     print(f"[+] {service}.{action}: {params}")
 
 
-def enumerate_permissions(ak, sk, st, services):
+def enumerate_permissions(profile, ak, sk, st, services):
     
     #Check that provided credentials are valid
-    if st == None:
-        client = boto3.client("sts", aws_access_key_id=ak, aws_secret_access_key=sk, region_name=REGION)
-    else:
-        client = boto3.client("sts", aws_access_key_id=ak, aws_secret_access_key=sk, aws_session_token=st, region_name=REGION)
+    client = get_client('sts', profile, ak, sk, st)
     try:
         identity = client.get_caller_identity()
         print(f"[*] Account ID: {identity['Account']}")
@@ -189,7 +215,7 @@ def enumerate_permissions(ak, sk, st, services):
         for action in actions:
             if action.startswith("get_") or action.startswith("list_") or action.startswith("describe_"):
                 if not (action == "get_paginator" or action == "get_waiter"):
-                    to_test.append((service,action,ak,sk,st))
+                    to_test.append((service,action,profile,ak,sk,st))
                 
     print(f"[*] Checking {len(to_test)} permissions\n")
 
@@ -216,7 +242,7 @@ def main():
     if not args.no_banner: 
         print(BANNER)
     
-    enumerate_permissions(args.access_key, args.secret_key, args.session_token, args.services)
+    enumerate_permissions(args.profile, args.access_key, args.secret_key, args.session_token, args.services)
 
 
 if __name__ == '__main__':
