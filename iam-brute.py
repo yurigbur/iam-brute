@@ -7,6 +7,8 @@ import boto3
 import datetime
 import multiprocessing
 import re
+import requests
+import random
 
 from multiprocessing import Pool
 from itertools import repeat
@@ -56,6 +58,8 @@ def parse_arguments():
     parser.add_argument('--secret-key', help='AWS secret key', default=None)
     parser.add_argument('--session-token', help='STS session token', default=None)
     parser.add_argument('--services', nargs='+', help='Space-sepearated list of services to enumerate', default=None) 
+    #TODO implement checking of specified bucket names for s3 nobucket errors.
+    #parser.add_argument('--buckets', help='File containing a list of target buckets that are than tested against s3 permissions', default=None)
     parser.add_argument('--verbose', help='Sets the level of information the script prints: "silent" only prints confirmed permissions, "warning" (default) prints parameter parsing errors and "debug" prints all errors', choices=["silent","warning","debug"], default="warning")
     parser.add_argument('--threads', help='Number of threads (Default 25)', type=int, default=25)
     parser.add_argument('--no-banner', help='Hides banner', action="store_true", default=False)
@@ -123,15 +127,35 @@ def get_client(service, profile, ak, sk, st):
         return boto3.client(service, region_name=REGION)
 
 
+def evaluate_client_error(service, action, error_response):
+    if error_response['ResponseMetadata']['HTTPStatusCode'] == 403:
+        if VERBOSE == "debug":
+            print(f"[*] Access denied for {service}.{action}\n{error_response['Error']['Message']}\n")
+        return True
+
+    if error_response['ResponseMetadata']['HTTPStatusCode'] in [400,422]:
+        if VERBOSE in ["warning", "debug"]:
+            print(f"[!] Cannot determine valid parameters for {service}.{action}\n{error_response['Error']['Message']}\n")
+        return True
+        
+        #special case for s3 as the existence of bucket names is checked before the permissions
+    if service == "s3" and error_response['Error']['Code'] == "NoSuchBucket":
+        if VERBOSE in ["warning", "debug"]:
+            print(f"[!] Unknown  {service}.{action}\n{error_response['Error']['Message']}\n")
+        return True
+
+
 def check_permission(service, action, profile, ak, sk, st):
 
     client = get_client(service, profile, ak, sk, st)
     params_needed = False
+    
+    expected_client_exceptions = (client.exceptions._code_to_exception)
+
     try:
         method = getattr(client, action)
         method()
-    except KeyboardInterrupt:
-        exit()
+
     except botocore.exceptions.ParamValidationError as param_error:
         try:
             parameter_error_list = str(param_error).split("\n")[1:]
@@ -143,45 +167,23 @@ def check_permission(service, action, profile, ak, sk, st):
                 parameter_dict[param_name] = get_parameter(param_name, service) 
             
             method(**parameter_dict)
-        except KeyboardInterrupt:
-            exit()
-        except botocore.exceptions.ClientError as client_error:
-            if "AccessDenied" in str(client_error) or "UnauthorizedOperation" in str(client_error) or "ForbiddenException" in str(client_error):
-                return
-            elif "NoSuchBucket" in str(client_error):
-                return
-            elif re.compile(r"Invalid(Input|Request|ParameterValue)|Validation(Error|Exception)").search(str(client_error)):
-                if VERBOSE in ["warning", "debug"]:
-                    print(f"[!] Cannot determine correct input for {service}.{action}\n{str(client_error)}\n")
-                return
-            elif re.compile(r"Invalid.*I(d|D)").search(str(client_error)):
-                if VERBOSE in ["warning", "debug"]:
-                    print(f"[!] Cannot determine correct ID for {service}.{action}\n{str(client_error)}\n")
-                return
-            elif re.compile(r"Invalid.*A(rn|RN)").search(str(client_error)):
-                if VERBOSE in ["warning", "debug"]:
-                    print(f"[!] Cannot determine correct Arn for {service}.{action}\n{str(client_error)}\n")
-                return
-            elif "BadRequestException" in str(client_error):
-                if VERBOSE in ["warning", "debug"]:
-                    print(f"[!] Bad request send for {service}.{action}. Parameters likely have invalid format\n{str(client_error)}\n")
+
+        except botocore.exceptions.ClientError as inner_client_error:
+            if evaluate_client_error(service, action, inner_client_error.response):
                 return
 
         except botocore.exceptions.ParamValidationError as param_validation_error:
             if VERBOSE in ["warning", "debug"]:
                 print(f"[!] Cannot determine correct parameter format for {service}.{action}\n{str(param_validation_error)}\n")
             return
-        except Exception as ie:
-            if VERBOSE == "debug":
-                print(f"[!] Unknown error for {service}.{action}\n{str(ie)}\n")
+
+    except botocore.exceptions.ClientError as outer_client_error:
+        if evaluate_client_error(service, action, outer_client_error.response):
             return
-    except Exception as oe:
-        if VERBOSE == "debug":
-            print(f"[!] Unknown error for {service}.{action}\n{str(oe)}\n")
-        return
 
     params = ("(" + ', '.join(parameter_dict.keys()) + ")") if params_needed else ""
     print(f"[+] {service}.{action}: {params}")
+    return
 
 
 def enumerate_permissions(profile, ak, sk, st, services):
@@ -219,18 +221,19 @@ def enumerate_permissions(profile, ak, sk, st, services):
                 
     print(f"[*] Checking {len(to_test)} permissions\n")
 
-    thread_pool = Pool(THREADS)
 
     try:
+        thread_pool = Pool(THREADS)
         results = thread_pool.starmap(check_permission, to_test)
     except KeyboardInterrupt:
-        print("[*] Keyboard Interrupt detected, exiting!")
-    finally:
+        print("[*] Keyboard Interrupt detected")
         try:
+            print("[*] Trying to shutdown threads. Press Ctrl+C again to exit hard")
             thread_pool.close()
             thread_pool.join()
-        except:
-            print("[!] Threads not shutting down nicely, exiting hard")
+        except KeyboardInterrupt:
+            print("[!] Threads not shutting down nicely, exiting hard!")
+            exit()
     
 
 def main():
