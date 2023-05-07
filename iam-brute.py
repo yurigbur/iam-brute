@@ -19,6 +19,7 @@ VERBOSE = "warning"
 
 # The following services produce inaccurate results as certain errors are currently not captured.
 #EXCLUDED_SERVICES = ["alexaforbusiness", "chime", "cloud9", "cloudfront", "cloudtrail", "codecommit", "cognito-idp", "comprehend", "elasticbeanstalk", "fsx", "kinesis", "kinesis-video-signaling", "kms", "license-manager", "logs", "redshift-serverless", "resource-explorer-2", "route53", "sdb", "service-quotas", "sqs", "sso", "transcribe", "transfer", "waf", "waf-regional", "wafv2", "workdocs", "workspaces"]
+EXCLUDED_SERVICES = []
 
 BANNER = """
   _____            __  __   ____  _____  _    _ _______ ______   _ 
@@ -128,21 +129,34 @@ def get_client(service, profile, ak, sk, st):
 
 
 def evaluate_client_error(service, action, error_response):
-    if error_response['ResponseMetadata']['HTTPStatusCode'] == 403:
+    if error_response['ResponseMetadata']['HTTPStatusCode'] in [403, 401]:
         if VERBOSE == "debug":
-            print(f"[*] Access denied for {service}.{action}\n{error_response['Error']['Message']}\n")
+            print(f"[*] Access denied for {service}.{action}\n{str(error_response)}\n")
         return True
 
-    if error_response['ResponseMetadata']['HTTPStatusCode'] in [400,422]:
+    if error_response['ResponseMetadata']['HTTPStatusCode'] in [400,422,500]:
         if VERBOSE in ["warning", "debug"]:
-            print(f"[!] Cannot determine valid parameters for {service}.{action}\n{error_response['Error']['Message']}\n")
+            print(f"[!] Cannot determine valid parameters for {service}.{action}\n{str(error_response)}\n")
         return True
         
-        #special case for s3 as the existence of bucket names is checked before the permissions
-    if service == "s3" and error_response['Error']['Code'] == "NoSuchBucket":
+    # special case for services that check certain parameters before the permissions are checked
+    if service in ["s3", "chime", "cloudfront", "route53", "workdocs"] and error_response['ResponseMetadata']['HTTPStatusCode'] == 404:
         if VERBOSE in ["warning", "debug"]:
-            print(f"[!] Unknown  {service}.{action}\n{error_response['Error']['Message']}\n")
+            print(f"[!] Resource not found or not allowed with provided dummy parameter(s) {service}.{action}\n{str(error_response)}\n")
         return True
+
+    if error_response['Error']['Code'] == "DeprecatedAPIException":
+        if VERBOSE in ["warning", "debug"]:
+            print(f"[!] Deprecated API Endpoint for {service}.{action}\n{str(error_response)}\n")
+        return True
+
+    # For some services boto3 throws access denied exceptions on a 400 status code (LOL).
+    if error_response['ResponseMetadata']['HTTPStatusCode'] == 400 and error_response['Error']['Code'] == "AccessDeniedException":
+        if VERBOSE == "debug":
+            print(f"[*] Access denied for {service}.{action}\n{str(error_response)}\n")
+        return True
+
+    return False
 
 
 def check_permission(service, action, profile, ak, sk, st):
@@ -150,11 +164,12 @@ def check_permission(service, action, profile, ak, sk, st):
     client = get_client(service, profile, ak, sk, st)
     params_needed = False
     
-    expected_client_exceptions = (client.exceptions._code_to_exception)
-
     try:
         method = getattr(client, action)
-        method()
+        response = method()
+        
+        if VERBOSE == "debug":
+            print(f"[*] Response for {service}.{action}\n{str(response)}\n")
 
     except botocore.exceptions.ParamValidationError as param_error:
         try:
@@ -166,20 +181,32 @@ def check_permission(service, action, profile, ak, sk, st):
                 param_name = param_error_text[38:-1] 
                 parameter_dict[param_name] = get_parameter(param_name, service) 
             
-            method(**parameter_dict)
+            response = method(**parameter_dict)
+
+            if VERBOSE == "debug":
+                print(f"[*] Response for {service}.{action}\n{str(response)}\n")
 
         except botocore.exceptions.ClientError as inner_client_error:
             if evaluate_client_error(service, action, inner_client_error.response):
                 return
+
+            if VERBOSE == "debug":
+                print(f"[*] ClientError for {service}.{action}\n{str(inner_client_error.response)}\n")
 
         except botocore.exceptions.ParamValidationError as param_validation_error:
             if VERBOSE in ["warning", "debug"]:
                 print(f"[!] Cannot determine correct parameter format for {service}.{action}\n{str(param_validation_error)}\n")
             return
 
+            if VERBOSE == "debug":
+                print(f"[*] ParamValidationError for {service}.{action}\n{str(param_validation_error)}\n")
+
     except botocore.exceptions.ClientError as outer_client_error:
         if evaluate_client_error(service, action, outer_client_error.response):
             return
+        
+        if VERBOSE == "debug":
+            print(f"[*] ClientError for {service}.{action}\n{str(outer_client_error.response)}\n")
 
     params = ("(" + ', '.join(parameter_dict.keys()) + ")") if params_needed else ""
     print(f"[+] {service}.{action}: {params}")
