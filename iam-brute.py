@@ -18,7 +18,7 @@ REGION = "us-east-1"
 VERBOSE = "warning"
 
 # The following services produce inaccurate results as certain errors are currently not captured.
-EXCLUDED_SERVICES = ["alexaforbusiness", "chime", "cloud9", "cloudfront", "cloudtrail", "codecommit", "cognito-idp", "comprehend", "elasticbeanstalk", "fsx", "kinesis", "kinesis-video-signaling", "kms", "license-manager", "logs", "redshift-serverless", "resource-explorer-2", "route53", "sdb", "service-quotas", "sqs", "sso", "transcribe", "transfer", "waf", "waf-regional", "wafv2", "workdocs", "workspaces"]
+#EXCLUDED_SERVICES = ["alexaforbusiness", "chime", "cloud9", "cloudfront", "cloudtrail", "codecommit", "cognito-idp", "comprehend", "elasticbeanstalk", "fsx", "kinesis", "kinesis-video-signaling", "kms", "license-manager", "logs", "redshift-serverless", "resource-explorer-2", "route53", "sdb", "service-quotas", "sqs", "sso", "transcribe", "transfer", "waf", "waf-regional", "wafv2", "workdocs", "workspaces"]
 
 BANNER = """
   _____            __  __   ____  _____  _    _ _______ ______   _ 
@@ -250,3 +250,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
