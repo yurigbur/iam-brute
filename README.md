@@ -17,14 +17,16 @@ python iam-brute.py --access-key ASIA... --secret-key ... --session-token ey...
 
 Refer to the help menu for further flags
 ```bash
-$ python3 iam-brute.py -h                                                                                                                     
-usage: iam-brute.py [-h] --access-key ACCESS_KEY --secret-key SECRET_KEY [--session-token SESSION_TOKEN] [--services SERVICES [SERVICES ...]]
-                    [--verbose {silent,warning,debug}] [--threads THREADS] [--no-banner]
+$ python3 iam-brute.py --help                                                                    
+usage: iam-brute.py [-h] [--profile PROFILE] [--access-key ACCESS_KEY] [--secret-key SECRET_KEY] [--session-token SESSION_TOKEN]
+                    [--services SERVICES [SERVICES ...]] [--exclude-services EXCLUDE_SERVICES [EXCLUDE_SERVICES ...]] [--verbose {silent,warning,debug}]
+                    [--threads THREADS] [--no-banner]
 
 IAM Brute
 
 options:
   -h, --help            show this help message and exit
+  --profile PROFILE     AWS CLI profile, using a profile explicitly will ignore --access-key and --secret-key
   --access-key ACCESS_KEY
                         AWS access key
   --secret-key SECRET_KEY
@@ -33,6 +35,8 @@ options:
                         STS session token
   --services SERVICES [SERVICES ...]
                         Space-sepearated list of services to enumerate
+  --exclude-services EXCLUDE_SERVICES [EXCLUDE_SERVICES ...]
+                        Space-sepearated list of excluded services (overwrites --services)
   --verbose {silent,warning,debug}
                         Sets the level of information the script prints: "silent" only prints confirmed permissions, "warning" (default) prints parameter
                         parsing errors and "debug" prints all errors
@@ -40,11 +44,30 @@ options:
   --no-banner           Hides banner
 ```
 
-**Review the EXCLUDED_SERVICE variable, it may contain services that you are looking for**
-
 ### Docker
 ```bash
 sudo docker run -it yukonsec/iam-brute 
+```
+
+### Misleading Outputs
+Some permissions always seem to return 200 status codes. If you encounter, one of the following outputs, they might not be very interesting.
+```
+[+] elasticbeanstalk.list_available_solution_stacks: 
+[+] elasticbeanstalk.list_platform_versions: 
+[+] dynamodb.describe_endpoints: 
+[+] elasticbeanstalk.describe_application_versions: 
+[+] elasticbeanstalk.describe_applications: 
+[+] elasticbeanstalk.describe_environments: 
+[+] elasticbeanstalk.describe_events: 
+[+] kinesis-video-archived-media.get_dash_streaming_session_url: 
+[+] kinesis-video-archived-media.get_hls_streaming_session_url: 
+[+] kinesis-video-archived-media.list_fragments: 
+[+] kinesis-video-signaling.get_ice_server_config: (ChannelARN)
+[+] route53.get_checker_ip_ranges: 
+[+] route53.get_geo_location: 
+[+] route53.list_geo_locations: 
+[+] sts.get_caller_identity: 
+[+] sts.get_session_token: 
 ```
 
 ## Disclaimer
@@ -55,3 +78,4 @@ I started writing this tool as I was frustrated with the coverage and maintenanc
 - Increase the dynamic parameter generation success rate by identifying re-occuring patterns and use fitting dummy parameters. 
 - Improve multi-threading exception handling
 - Write watcher that kills hanging threads.
+- Re-write Logging / Output
