@@ -21,7 +21,7 @@ class LVL(Enum):
 
 THREADS = 25
 REGION = "us-east-1"
-VERBOSE = LVL.WARNING.Value
+VERBOSE = LVL.WARNING.value
 CONN_TIMEOUT = 60
 READ_TIMEOUT = 60 
 
@@ -64,7 +64,7 @@ def parse_arguments():
     parser.add_argument('--session-token', help='STS session token', default=None)
     parser.add_argument('--services', nargs='+', help='Space-sepearated list of services to enumerate', default=None) 
     parser.add_argument('--exclude-services', nargs='+', help='Space-sepearated list of excluded services (overwrites --services)', default=None) 
-    parser.add_argument('--verbose', help='Sets the level of information the script prints: "silent" only prints confirmed permissions, "warning" (default) prints parameter parsing errors and "debug" prints all errors', choices=["SILENT","WARNING","DEBUG"], default="warning")
+    parser.add_argument('--verbose', help='Sets the level of information the script prints: "silent" only prints confirmed permissions, "warning" (default) prints parameter parsing errors and "debug" prints all errors', choices=["SILENT","WARNING","DEBUG"], default="WARNING")
     parser.add_argument('--threads', help='Number of threads (Default 25)', type=int, default=25)
     parser.add_argument('--no-banner', help='Hides banner', action="store_true", default=False)
 
@@ -116,7 +116,7 @@ def get_parameter(param_name, service):
         return "ABCDEFGHIJKLMNOPQRSTUVWXYZ" 
     
 
-def write_ouput(level, msg):
+def write_output(level, msg):
     if level.value <= VERBOSE.value:
         print(msg)
     
@@ -169,7 +169,7 @@ def check_permission_with_param(service, action, parameters, client):
         method = getattr(client, action)
         response = method(**parameters)
 
-    write_output(LVL.DEBUG,f"[*] Response for {service}.{action}\n{str(response)}\n")
+        write_output(LVL.DEBUG,f"[*] Response for {service}.{action}\n{str(response)}\n")
 
     except botocore.exceptions.ClientError as client_error:
         if evaluate_client_error(service, action, client_error.response):
@@ -210,7 +210,7 @@ def check_permission(service, action, profile, ak, sk, st):
         method = getattr(client, action)
         response = method()
         
-    write_output(LVL.DEBUG, str(response))
+        write_output(LVL.DEBUG, str(response))
     
     except botocore.exceptions.ParamValidationError as param_error:
         parameter_error_list = str(param_error).split("\n")[1:]
@@ -298,7 +298,7 @@ def main():
     global VERBOSE, THREADS
     VERBOSE = LVL[args.verbose]
     THREADS = args.threads
-    
+
     if not args.no_banner: 
         print(BANNER)
         
