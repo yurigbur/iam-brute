@@ -12,10 +12,16 @@ import random
 
 from multiprocessing import Pool
 from itertools import repeat
+from enum import Enum
+
+class LVL(Enum):
+    SILENT = 1
+    WARNING = 2
+    DEBUG = 3
 
 THREADS = 25
 REGION = "us-east-1"
-VERBOSE = "warning"
+VERBOSE = LVL.WARNING.Value
 CONN_TIMEOUT = 60
 READ_TIMEOUT = 60 
 
@@ -58,7 +64,7 @@ def parse_arguments():
     parser.add_argument('--session-token', help='STS session token', default=None)
     parser.add_argument('--services', nargs='+', help='Space-sepearated list of services to enumerate', default=None) 
     parser.add_argument('--exclude-services', nargs='+', help='Space-sepearated list of excluded services (overwrites --services)', default=None) 
-    parser.add_argument('--verbose', help='Sets the level of information the script prints: "silent" only prints confirmed permissions, "warning" (default) prints parameter parsing errors and "debug" prints all errors', choices=["silent","warning","debug"], default="warning")
+    parser.add_argument('--verbose', help='Sets the level of information the script prints: "silent" only prints confirmed permissions, "warning" (default) prints parameter parsing errors and "debug" prints all errors', choices=["SILENT","WARNING","DEBUG"], default="warning")
     parser.add_argument('--threads', help='Number of threads (Default 25)', type=int, default=25)
     parser.add_argument('--no-banner', help='Hides banner', action="store_true", default=False)
 
@@ -78,6 +84,7 @@ def parse_arguments():
         exit()
 
     return args
+
 
 
 def get_parameter(param_name, service):
@@ -109,6 +116,11 @@ def get_parameter(param_name, service):
         return "ABCDEFGHIJKLMNOPQRSTUVWXYZ" 
     
 
+def write_ouput(level, msg):
+    if level.value <= VERBOSE.value:
+        print(msg)
+    
+
 def get_client(service, profile, ak, sk, st):
 
     config = botocore.client.Config(connect_timeout=CONN_TIMEOUT, read_timeout=READ_TIMEOUT, retries={'max_attempts': 1})
@@ -128,30 +140,25 @@ def get_client(service, profile, ak, sk, st):
 
 def evaluate_client_error(service, action, error_response):
     if error_response['ResponseMetadata']['HTTPStatusCode'] in [403, 401]:
-        if VERBOSE == "debug":
-            print(f"[*] Access denied for {service}.{action}\n{str(error_response)}\n")
+        write_output(LVL.DEBUG,f"[*] Access denied for {service}.{action}\n{str(error_response)}\n")
         return True
 
     if error_response['ResponseMetadata']['HTTPStatusCode'] in [400,422,500]:
-        if VERBOSE in ["warning", "debug"]:
-            print(f"[!] Cannot determine valid parameters for {service}.{action}\n{str(error_response)}\n")
+        write_output(LVL.WARNING,f"[!] Cannot determine valid parameters for {service}.{action}\n{str(error_response)}\n")
         return True
         
     # special case for services that check certain parameters before the permissions are checked
     if service in ["s3", "chime", "cloudfront", "route53", "workdocs"] and error_response['ResponseMetadata']['HTTPStatusCode'] == 404:
-        if VERBOSE in ["warning", "debug"]:
-            print(f"[!] Resource not found or not allowed with provided dummy parameter(s) {service}.{action}\n{str(error_response)}\n")
+        write_output(LVL.WARNING,f"[!] Resource not found or not allowed with provided dummy parameter(s) {service}.{action}\n{str(error_response)}\n")
         return True
 
     if error_response['Error']['Code'] == "DeprecatedAPIException":
-        if VERBOSE in ["warning", "debug"]:
-            print(f"[!] Deprecated API Endpoint for {service}.{action}\n{str(error_response)}\n")
+        write_output(LVL.WARNING,f"[!] Deprecated API Endpoint for {service}.{action}\n{str(error_response)}\n")
         return True
 
     # For some services boto3 throws access denied exceptions on a 400 status code (LOL).
     if error_response['ResponseMetadata']['HTTPStatusCode'] == 400 and error_response['Error']['Code'] == "AccessDeniedException":
-        if VERBOSE == "debug":
-            print(f"[*] Access denied for {service}.{action}\n{str(error_response)}\n")
+        write_output(LVL.DEBUG,f"[*] Access denied for {service}.{action}\n{str(error_response)}\n")
         return True
 
     return False
@@ -162,39 +169,33 @@ def check_permission_with_param(service, action, parameters, client):
         method = getattr(client, action)
         response = method(**parameters)
 
-        if VERBOSE == "debug":
-            print(f"[*] Response for {service}.{action}\n{str(response)}\n")
+    write_output(LVL.DEBUG,f"[*] Response for {service}.{action}\n{str(response)}\n")
 
     except botocore.exceptions.ClientError as client_error:
         if evaluate_client_error(service, action, client_error.response):
             return True
 
-        if VERBOSE == "debug":
-            print(f"[*] ClientError for {service}.{action}\n{str(client_error.response)}\n")
+        write_output(LVL.DEBUG,f"[*] ClientError for {service}.{action}\n{str(client_error.response)}\n")
 
     except botocore.exceptions.ParamValidationError as param_validation_error:
-        if VERBOSE in ["warning", "debug"]:
-            print(f"[!] Cannot determine correct parameter format for {service}.{action}\n{str(param_validation_error)}\n")
+        write_output(LVL.WARNING,f"[!] Cannot determine correct parameter format for {service}.{action}\n{str(param_validation_error)}\n")
         return True
 
     except botocore.exceptions.NoAuthTokenError as no_auth_token:
-        if VERBOSE == "debug":
-            print(f"[*] No authentication token for {service}.{action}\n{str(no_auth_token)}\n")
+        write_output(LVL.DEBUG,f"[*] No authentication token for {service}.{action}\n{str(no_auth_token)}\n")
         return True
 
     except botocore.exceptions.EndpointConnectionError as endpoint_error:
-        if VERBOSE in ["warning", "debug"]:
-            print(f"[*] Endpoint connection error for: {service}.{action}\n{str(endpoint_error)}\n")
+        write_output(LVL.WARNING,f"[*] Endpoint connection error for: {service}.{action}\n{str(endpoint_error)}\n")
         return True
 
     except KeyError as key_error:
-        if VERBOSE in ["warning", "debug","silent"]:
-            print(f"[!] Cannot determine correct parameter format for {service}.{action}\n{str(key_error)}\n")
+        #remove silent output when clarified what happens with the special key errors.
+        write_output(LVL.SILENT,f"[!] Cannot determine correct parameter format for {service}.{action}\n{str(key_error)}\n")
         return True
 
     except botocore.exceptions.EndpointResolutionError as endpoint_resolution_error:
-        if VERBOSE in ["warning", "debug"]:
-            print(f"[!] Cannot determine correct parameter for {service}.{action}\n{str(endpoint_resolution_error)}\n")
+        write_output(LVL.WARNING,f"[!] Cannot determine correct parameter for {service}.{action}\n{str(endpoint_resolution_error)}\n")
         return True
 
     return False
@@ -209,9 +210,8 @@ def check_permission(service, action, profile, ak, sk, st):
         method = getattr(client, action)
         response = method()
         
-        if VERBOSE == "debug":
-            print(f"[*] Response for {service}.{action}\n{str(response)}\n")
-
+    write_output(LVL.DEBUG, str(response))
+    
     except botocore.exceptions.ParamValidationError as param_error:
         parameter_error_list = str(param_error).split("\n")[1:]
         parameter_dict = dict()
@@ -228,27 +228,24 @@ def check_permission(service, action, profile, ak, sk, st):
         if evaluate_client_error(service, action, client_error.response):
             return
         
-        if VERBOSE == "debug":
-            print(f"[*] ClientError for {service}.{action}\n{str(client_error.response)}\n")
+        write_ouput(LVL.DEBUG,f"[*] ClientError for {service}.{action}\n{str(client_error.response)}\n")
 
     except botocore.exceptions.NoAuthTokenError as no_auth_token:
-        if VERBOSE == "debug":
-            print(f"[*] No authentication token for {service}.{action}\n{str(no_auth_token)}\n")
+        write_output(LVL.DEBUG,f"[*] No authentication token for {service}.{action}\n{str(no_auth_token)}\n")
         return
 
     except botocore.exceptions.EndpointConnectionError as endpoint_error:
-        if VERBOSE in ["warning", "debug"]:
-            print(f"[*] Endpoint connection error for: {service}.{action}\n{str(endpoint_error)}\n")
+        write_output(LVL.WARNING,f"[*] Endpoint connection error for: {service}.{action}\n{str(endpoint_error)}\n")
         return
 
     #TODO extract missing parmaters from key error and re-do check similar to ParamValidationError
     except KeyError as key_error:
-        if VERBOSE in ["warning", "debug","silent"]: #remove error output for silent after error is resolved
-            print(f"[!] Cannot determine correct parameter format for {service}.{action}\n{str(key_error)}\n")
+        #remove error output for silent after error is resolved
+        write_output(LVL.SILENT,f"[!] Cannot determine correct parameter format for {service}.{action}\n{str(key_error)}\n")
         return
 
     params = ("(" + ', '.join(parameter_dict.keys()) + ")") if params_needed else ""
-    print(f"[+] {service}.{action}: {params}")
+    write_output(LVL.SILENT,f"[+] {service}.{action}: {params}")
     return
 
 
@@ -299,7 +296,7 @@ def enumerate_permissions(profile, ak, sk, st, services):
 def main():
     args = parse_arguments()
     global VERBOSE, THREADS
-    VERBOSE = args.verbose
+    VERBOSE = LVL[args.verbose]
     THREADS = args.threads
     
     if not args.no_banner: 
