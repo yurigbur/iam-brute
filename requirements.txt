@@ -4,5 +4,4 @@ argparse
 botocore
 boto3
 requests
-random
 itertools
