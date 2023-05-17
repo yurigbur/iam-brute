@@ -3,10 +3,6 @@ botocore
 argparse
 botocore
 boto3
-datetime
-multiprocessing
 requests
 random
-json
 itertools
-enum
