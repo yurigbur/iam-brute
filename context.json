@@ -1,0 +1,12 @@
+{
+	"service":{
+		"s3":{
+			"BucketName":"foobar"
+		},
+		"iam":{
+			"RoleName":"ping"
+		}
+	},
+	"RoleName":"pong", 
+	"id":1335
+}

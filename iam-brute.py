@@ -9,6 +9,7 @@ import multiprocessing
 import re
 import requests
 import random
+import json
 
 from multiprocessing import Pool
 from itertools import repeat
@@ -67,6 +68,7 @@ def parse_arguments():
     parser.add_argument('--verbose', help='Sets the level of information the script prints: "silent" only prints confirmed permissions, "warning" (default) prints parameter parsing errors and "debug" prints all errors', choices=["SILENT","WARNING","DEBUG"], default="WARNING")
     parser.add_argument('--threads', help='Number of threads (Default 25)', type=int, default=25)
     parser.add_argument('--no-banner', help='Hides banner', action="store_true", default=False)
+    parser.add_argument('--context', help='Path to a context file that is used to obtain parameters for the requests', default=None)
 
     args = parser.parse_args()
 
@@ -86,9 +88,30 @@ def parse_arguments():
     return args
 
 
+def get_context_param(service, param_name, context):
+    result = None
+    level = []
+    if service in context.get_keys(): 
+        level = context[service]
+    else:
+        level = context
 
-def get_parameter(param_name, service):
+    for key in level.get_keys():
+            if param_name.lower() == key.lower():
+                resutl = level[key]
+    
+    return result
+
+
+
+def get_parameter(param_name, service, context):
     # Heuristical approach to choose a type of format that is required based on the parameter name
+    
+    if context:
+        context_param = get_context_param(service, param_name, context)
+        if context_param:
+            return context_param
+    #Static rules
     if "arn" in param_name.lower():
         if "policy" in param_name.lower():
             return "arn:aws:iam::aws:policy/foobar"
@@ -201,7 +224,7 @@ def check_permission_with_param(service, action, parameters, client):
     return False
 
 
-def check_permission(service, action, profile, ak, sk, st):
+def check_permission(service, action, profile, ak, sk, st, context):
 
     client = get_client(service, profile, ak, sk, st)
     params_needed = False
@@ -219,7 +242,7 @@ def check_permission(service, action, profile, ak, sk, st):
             
         for param_error_text in parameter_error_list:
             param_name = param_error_text[38:-1] 
-            parameter_dict[param_name] = get_parameter(param_name, service) 
+            parameter_dict[param_name] = get_parameter(param_name, service, context) 
         
         if check_permission_with_param(service, action, parameter_dict, client):
             return
@@ -249,7 +272,7 @@ def check_permission(service, action, profile, ak, sk, st):
     return
 
 
-def enumerate_permissions(profile, ak, sk, st, services):
+def enumerate_permissions(profile, ak, sk, st, services, context):
     
     #Check that provided credentials are valid
     client = get_client('sts', profile, ak, sk, st)
@@ -269,7 +292,7 @@ def enumerate_permissions(profile, ak, sk, st, services):
         for action in actions:
             if action.startswith("get_") or action.startswith("list_") or action.startswith("describe_"):
                 if not (action == "get_paginator" or action == "get_waiter"):
-                    to_test.append((service,action,profile,ak,sk,st))
+                    to_test.append((service,action,profile,ak,sk,st,context))
                 
     print(f"[*] Checking {len(to_test)} permissions\n")
 
@@ -299,6 +322,11 @@ def main():
     VERBOSE = LVL[args.verbose]
     THREADS = args.threads
 
+    context = None
+    if args.context:
+        with open(args.context, "r") as fd:
+            context = json.load(fd)
+
     if not args.no_banner: 
         print(BANNER)
         
@@ -311,7 +339,7 @@ def main():
     if args.exclude_services:
         services = [x for x in services if x not in args.exclude_services]
     
-    enumerate_permissions(args.profile, args.access_key, args.secret_key, args.session_token, services)
+    enumerate_permissions(args.profile, args.access_key, args.secret_key, args.session_token, services, context)
 
 
 if __name__ == '__main__':
