@@ -15,12 +15,12 @@ python iam-brute.py --access-key AKIA... --secret-key ...
 python iam-brute.py --access-key ASIA... --secret-key ... --session-token ey...
 ```
 
-Refer to the help menu for further flags
+Refer to the help menu for more options
 ```bash
-$ python3 iam-brute.py --help                                                                    
+$ python3 iam-brute.py -h                                                                                                   
 usage: iam-brute.py [-h] [--profile PROFILE] [--access-key ACCESS_KEY] [--secret-key SECRET_KEY] [--session-token SESSION_TOKEN]
-                    [--services SERVICES [SERVICES ...]] [--exclude-services EXCLUDE_SERVICES [EXCLUDE_SERVICES ...]] [--verbose {silent,warning,debug}]
-                    [--threads THREADS] [--no-banner]
+                    [--services SERVICES [SERVICES ...]] [--exclude-services EXCLUDE_SERVICES [EXCLUDE_SERVICES ...]] [--verbose {SILENT,WARNING,DEBUG}]
+                    [--threads THREADS] [--no-banner] [--context CONTEXT]
 
 IAM Brute
 
@@ -37,11 +37,13 @@ options:
                         Space-sepearated list of services to enumerate
   --exclude-services EXCLUDE_SERVICES [EXCLUDE_SERVICES ...]
                         Space-sepearated list of excluded services (overwrites --services)
-  --verbose {silent,warning,debug}
+  --verbose {SILENT,WARNING,DEBUG}
                         Sets the level of information the script prints: "silent" only prints confirmed permissions, "warning" (default) prints parameter
                         parsing errors and "debug" prints all errors
   --threads THREADS     Number of threads (Default 25)
   --no-banner           Hides banner
+  --context CONTEXT     Path to a context file that is used to obtain parameters for the requests
+
 ```
 
 ### Docker
@@ -71,7 +73,7 @@ Some permissions always seem to return 200 status codes. If you encounter, one o
 ```
 
 ### Context Support
-As AWS permissions can be scoped to certain resources, The script might receive access denied responses for dummy parameters even though the request would succeed with other parameters. With the --context flag a JSON file can be provided that contains valid role names, arns, ids, ... that are than used in the requests. The parameters can be scoped globally or for specific services. **Currently there can be only one value per parameter**.
+As AWS permissions can be scoped to certain resources, the script might receive access denied responses for dummy parameters even though the request would succeed with other parameters. With the --context flag a JSON file can be provided that contains valid role names, arns, ids, ... that are than used in the requests. The parameters can be scoped globally or for specific services. Have a loog at the example for information on how to format the context file. **Currently there can be only one value per parameter**.
 
 ## Disclaimer
 I started writing this tool as I was frustrated with the coverage and maintenance state of other well known aws iam enumeration tools like enumerate-iam and weirdAAL. I am not a developer and I work on this with a very limted time budget. Therefore, you should not expect the script to be performant.
@@ -82,3 +84,4 @@ I started writing this tool as I was frustrated with the coverage and maintenanc
 - Improve multi-threading exception handling
 - Write watcher that kills hanging threads.
 - Re-write Logging / Output
+- Support multiple values for the same parameter key for context support
