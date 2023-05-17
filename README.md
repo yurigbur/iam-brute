@@ -9,10 +9,11 @@ pip install -r requirements.txt
 ```
 
 ## Usage
-The tool can be used with user access keys or with temporary access keys for roles
+The tool can be used with user access keys or with temporary access keys for roles as well as with AWS CLI profiles
 ```bash
-python iam-brute.py --access-key AKIA... --secret-key ...
-python iam-brute.py --access-key ASIA... --secret-key ... --session-token ey...
+python3 iam-brute.py --access-key AKIA... --secret-key ...
+python3 iam-brute.py --access-key ASIA... --secret-key ... --session-token ey...
+python3 iam-brute.py --profile my-profile
 ```
 
 Refer to the help menu for more options
@@ -44,6 +45,11 @@ options:
   --no-banner           Hides banner
   --context CONTEXT     Path to a context file that is used to obtain parameters for the requests
 
+```
+
+There are currently some unhandled multi-processing errors. I would recommend to pipe the error output to /dev/null for a nicer output.
+```bash
+python3 iam-brute.py --profile my-profile --verbose silent 2>/dev/null
 ```
 
 ### Docker
