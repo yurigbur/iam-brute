@@ -91,12 +91,12 @@ def parse_arguments():
 def get_context_param(service, param_name, context):
     result = None
     level = []
-    if service in context['services'].get_keys(): 
+    if service in list(context['services'].keys()): 
         level = context['services'][service]
     else:
         level = context
 
-    for key in level.get_keys().remove('services'):
+    for key in list(level.keys()):
             if param_name.lower() == key.lower():
                 result = level[key]
     

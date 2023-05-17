@@ -1,5 +1,5 @@
 {
-	"service":{
+	"services":{
 		"s3":{
 			"BucketName":"foobar"
 		},
@@ -8,5 +8,5 @@
 		}
 	},
 	"RoleName":"pong", 
-	"id":1335
+	"id":1337
 }
