@@ -70,6 +70,9 @@ Some permissions always seem to return 200 status codes. If you encounter, one o
 [+] sts.get_session_token: 
 ```
 
+### Context Support
+As AWS permissions can be scoped to certain resources, The script might receive access denied responses for dummy parameters even though the request would succeed with other parameters. With the --context flag a JSON file can be provided that contains valid role names, arns, ids, ... that are than used in the requests. The parameters can be scoped globally or for specific services. **Currently there can be only one value per parameter**.
+
 ## Disclaimer
 I started writing this tool as I was frustrated with the coverage and maintenance state of other well known aws iam enumeration tools like enumerate-iam and weirdAAL. I am not a developer and I work on this with a very limted time budget. Therefore, you should not expect the script to be performant.
 
