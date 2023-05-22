@@ -91,7 +91,7 @@ def parse_arguments():
 def get_context_param(service, param_name, context):
     result = None
     level = []
-    if service in list(context['services'].keys()): 
+    if "services" in context and service in list(context['services'].keys()): 
         level = context['services'][service]
     else:
         level = context
