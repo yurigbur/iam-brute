@@ -266,6 +266,7 @@ def check_permission(service, action, profile, ak, sk, st, context):
         #remove error output for silent after error is resolved
         write_output(LVL.SILENT,f"[!] Cannot determine correct parameter format for {service}.{action}\n{str(key_error)}\n")
         return
+    
 
     params = ("(" + ', '.join(parameter_dict.keys()) + ")") if params_needed else ""
     write_output(LVL.SILENT,f"[+] {service}.{action}: {params}")
@@ -309,6 +310,11 @@ def enumerate_permissions(profile, ak, sk, st, services, context):
         except KeyboardInterrupt:
             print("[!] Threads not shutting down nicely, exiting hard!")
             exit()
+        
+    #TODO find out why this happens
+    except multiprocessing.pool.MaybeEncodingError as encoding_error:
+        write_output(LVL.SILENT,f"[!] Weird internal encoding error while shutting down threads\n{str(encoding_error)}\n")
+    
     try:
         thread_pool.close()
         thread_pool.join()
