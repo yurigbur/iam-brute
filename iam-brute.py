@@ -11,7 +11,7 @@ import requests
 import random
 import json
 
-from multiprocessing import Pool
+from multiprocessing import Manager, Process
 from itertools import repeat
 from enum import Enum
 
@@ -271,55 +271,71 @@ def check_permission(service, action, profile, ak, sk, st, context):
     params = ("(" + ', '.join(parameter_dict.keys()) + ")") if params_needed else ""
     write_output(LVL.SILENT,f"[+] {service}.{action}: {params}")
     return
-
-
-def enumerate_permissions(profile, ak, sk, st, services, context):
     
-    #Check that provided credentials are valid
-    client = get_client('sts', profile, ak, sk, st)
-    try:
-        identity = client.get_caller_identity()
-        print(f"[*] Account ID: {identity['Account']}")
-        print(f"[*] Principal: {identity['Arn']}")
-    except:
-        print("[!] Provided credentials are invalid")
-        exit()
+
+def generate_inital_queue(queue, profile, ak, sk, st, services, context):
 
     # Generate a list of service and action tuples for all list, get and describe actions
-    to_test = []
+    count = 0
     for service in services:
         client = boto3.client(service,region_name=REGION)
         actions = filter(lambda action: not (action.startswith("__") or action.startswith("_")), dir(client))
         for action in actions:
             if action.startswith("get_") or action.startswith("list_") or action.startswith("describe_"):
                 if not (action == "get_paginator" or action == "get_waiter"):
-                    to_test.append((service,action,profile,ak,sk,st,context))
-                
-    print(f"[*] Checking {len(to_test)} permissions\n")
+                    count += 1
+                    queue.put({
+                        "service":service,
+                        "action":action,
+                        "profile":profile,
+                        "ak":ak,
+                        "sk":sk,
+                        "st":st,
+                        "parameters":None
+                    })
+
+    print(f"[*] Checking {count} permissions\n")
 
 
-    try:
-        thread_pool = Pool(THREADS)
-        results = thread_pool.starmap(check_permission, to_test)
-    except KeyboardInterrupt:
-        print("[*] Keyboard Interrupt detected")
+def worker(queue, results):
+    while True:
+        if queue.empty():
+            break
+        else:
+            try:
+                val = queue.get()
+            except EOFError:
+                break
+
+            print(f"{val['service']}:{val['action']}")
+
+
+def enumerate_permissions(profile, ak, sk, st, services, context):
+
+    with Manager() as manager:
+        queue = manager.Queue()
+        results = manager.Queue()
+
+        generate_inital_queue(queue, profile, ak, sk, st, services, context)
+
         try:
-            print("[*] Trying to shutdown threads. Press Ctrl+C again to exit hard")
-            thread_pool.close()
-            thread_pool.join()
+            processes = [Process(target=worker, args=(queue,results))]
+
+            for process in processes:
+                process.start()
+
+            while True:
+                if queue.empty():
+                    break
+
+            for process in processes:
+                process.kill()
+
         except KeyboardInterrupt:
-            print("[!] Threads not shutting down nicely, exiting hard!")
+            print("[*] Keyboard Interrupt detected")
+            for p in processes:
+                p.kill()
             exit()
-        
-    #TODO find out why this happens
-    except multiprocessing.pool.MaybeEncodingError as encoding_error:
-        write_output(LVL.SILENT,f"[!] Weird internal encoding error while shutting down threads\n{str(encoding_error)}\n")
-    
-    try:
-        thread_pool.close()
-        thread_pool.join()
-    except:
-        exit()
     
 
 def main():
@@ -344,6 +360,16 @@ def main():
         services = args.services
     if args.exclude_services:
         services = [x for x in services if x not in args.exclude_services]
+
+    #Check that provided credentials are valid
+    # client = get_client('sts', args.profile, args.access_key, args.secret_key, args.session_token)
+    # try:
+    #     identity = client.get_caller_identity()
+    #     print(f"[*] Account ID: {identity['Account']}")
+    #     print(f"[*] Principal: {identity['Arn']}")
+    # except:
+    #     print("[!] Provided credentials are invalid")
+    #     exit()
     
     enumerate_permissions(args.profile, args.access_key, args.secret_key, args.session_token, services, context)
 
