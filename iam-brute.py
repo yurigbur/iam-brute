@@ -114,11 +114,6 @@ def generate_inital_queue(queue, profile, ak, sk, st, services, context):
     print(f"[*] Checking {count} permissions\n")
 
 
-def start_process(queue, results):
-    enum_worker = worker.Worker(queue, results)
-    enum_worker.run()
-
-
 def enumerate_permissions(profile, ak, sk, st, services, context):
 
     with Manager() as manager:
@@ -128,7 +123,7 @@ def enumerate_permissions(profile, ak, sk, st, services, context):
         generate_inital_queue(queue, profile, ak, sk, st, services, context)
 
         try:
-            processes = [Process(target=start_process, args=(queue,results))]
+            processes = [Process(target=worker.run, args=(queue,results))]
 
             for process in processes:
                 process.start()
