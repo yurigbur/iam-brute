@@ -65,7 +65,7 @@ def parse_arguments():
     parser.add_argument('--session-token', help='STS session token', default=None)
     parser.add_argument('--services', nargs='+', help='Space-sepearated list of services to enumerate', default=None) 
     parser.add_argument('--exclude-services', nargs='+', help='Space-sepearated list of excluded services (overwrites --services)', default=None) 
-    parser.add_argument('--verbose', help='Sets the level of information the script prints: "silent" only prints confirmed permissions, "warning" (default) prints parameter parsing errors and "debug" prints all errors', choices=["SILENT","WARNING","DEBUG"], default="WARNING")
+    parser.add_argument('--verbose', help='Sets the level of information the script prints: "SILENT" (default) only prints confirmed permissions, "WARNING" prints parameter errors and "DEBUG" prints infos for all requests', choices=["SILENT","WARNING","DEBUG"], default="SILENT")
     parser.add_argument('--threads', help='Number of threads (Default 25)', type=int, default=25)
     parser.add_argument('--no-banner', help='Hides banner', action="store_true", default=False)
     parser.add_argument('--context', help='Path to a context file that is used to obtain parameters for the requests', default=None)
@@ -251,7 +251,7 @@ def check_permission(service, action, profile, ak, sk, st, context):
         if evaluate_client_error(service, action, client_error.response):
             return
         
-        write_ouput(LVL.DEBUG,f"[*] ClientError for {service}.{action}\n{str(client_error.response)}\n")
+        write_output(LVL.DEBUG,f"[*] ClientError for {service}.{action}\n{str(client_error.response)}\n")
 
     except botocore.exceptions.NoAuthTokenError as no_auth_token:
         write_output(LVL.DEBUG,f"[*] No authentication token for {service}.{action}\n{str(no_auth_token)}\n")
@@ -259,6 +259,10 @@ def check_permission(service, action, profile, ak, sk, st, context):
 
     except botocore.exceptions.EndpointConnectionError as endpoint_error:
         write_output(LVL.WARNING,f"[*] Endpoint connection error for: {service}.{action}\n{str(endpoint_error)}\n")
+        return
+    
+    except botocore.exceptions.EndpointResolutionError as endpoint_resolution_error:
+        write_output(LVL.WARNING,f"[!] Cannot determine correct parameter for {service}.{action}\n{str(endpoint_resolution_error)}\n")
         return
 
     #TODO extract missing parmaters from key error and re-do check similar to ParamValidationError
