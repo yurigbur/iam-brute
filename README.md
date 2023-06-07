@@ -1,7 +1,7 @@
 # I am Brute!
 The idea of this enumeration script is to derive available AWS APIs directly from the boto3 library. As this library is (currently) nicely maintained and up to date with the AWS API, this removes the necessity to re-generate and maintain a list of endpoints that are checked. As far as no fundamental things are changed in boto3 or AWS, this script will always be up to date.
 
-Currently, only get, list and describe permissions are checked to avoid accidentially manipulating resources. The dynamic parameter generation currently only supports a few parameters that allow arbitrary input or are covered by the basic heuristical dummy parameter generation. For parameters that expect unknowncformats, the parameter validation will fail. If this is the case, no access rights can be checked. The script prints the permissions in question and lists the parameters where the dummy input failed.
+Currently, only get, list and describe permissions are checked to avoid accidentially manipulating resources. The dynamic parameter generation currently only supports a few parameters that allow arbitrary input or are covered by the basic heuristical dummy parameter generation. For parameters that expect unknown formats, the parameter validation will fail. If this is the case, no access rights can be checked. The context feature can be used to add known parameters.
 
 ## Installation
 ```bash
@@ -18,7 +18,7 @@ python3 iam-brute.py --profile my-profile
 
 Refer to the help menu for more options
 ```bash
-$ python3 iam-brute.py -h                                                                                                   
+$ python3 iam-brute.py -h
 usage: iam-brute.py [-h] [--profile PROFILE] [--access-key ACCESS_KEY] [--secret-key SECRET_KEY] [--session-token SESSION_TOKEN]
                     [--services SERVICES [SERVICES ...]] [--exclude-services EXCLUDE_SERVICES [EXCLUDE_SERVICES ...]] [--verbose {SILENT,WARNING,DEBUG}]
                     [--threads THREADS] [--no-banner] [--context CONTEXT]
@@ -39,20 +39,16 @@ options:
   --exclude-services EXCLUDE_SERVICES [EXCLUDE_SERVICES ...]
                         Space-sepearated list of excluded services (overwrites --services)
   --verbose {SILENT,WARNING,DEBUG}
-                        Sets the level of information the script prints: "silent" only prints confirmed permissions, "warning" (default) prints parameter
-                        parsing errors and "debug" prints all errors
+                        Sets the level of information the script prints: "SILENT" (default) only prints confirmed permissions, "WARNING" prints parameter
+                        errors and "DEBUG" prints infos for all requests
   --threads THREADS     Number of threads (Default 25)
   --no-banner           Hides banner
   --context CONTEXT     Path to a context file that is used to obtain parameters for the requests
 
 ```
 
-There are currently some unhandled multi-processing errors. I would recommend to pipe the error output to /dev/null for a nicer output.
-```bash
-python3 iam-brute.py --profile my-profile --verbose silent 2>/dev/null
-```
 
-### Docker
+### Docker (only updated on versioned releases)
 ```bash
 sudo docker run -it yukonsec/iam-brute 
 ```
@@ -82,12 +78,13 @@ Some permissions always seem to return 200 status codes. If you encounter, one o
 As AWS permissions can be scoped to certain resources, the script might receive access denied responses for dummy parameters even though the request would succeed with other parameters. With the --context flag a JSON file can be provided that contains valid role names, arns, ids, ... that are than used in the requests. The parameters can be scoped globally or for specific services. Have a loog at the example for information on how to format the context file. **Currently there can be only one value per parameter**.
 
 ## Disclaimer
-I started writing this tool as I was frustrated with the coverage and maintenance state of other well known aws iam enumeration tools like enumerate-iam and weirdAAL. I am not a developer and I work on this with a very limted time budget. Therefore, you should not expect the script to be performant.
+I started writing this tool as I was frustrated with the coverage and maintenance state of other well known aws iam enumeration tools like enumerate-iam and weirdAAL. I am not a developer and I work on this with a very limted time budget. Therefore, you should not expect the script to be performant or bug-free. Feel free to create issues or pull requests but do not expect them to be processed in a timely manner.
 
 ### Roadmap / Ideas
 - Include permissions besides get, list and describe with dry-runs if available
 - Increase the dynamic parameter generation success rate by identifying re-occuring patterns and use fitting dummy parameters. 
 - Improve multi-threading exception handling
-- Write watcher that kills hanging threads.
-- Re-write Logging / Output
-- Support multiple values for the same parameter key for context support
+- Re-write Logging / Output.
+- Support multiple values for the same parameter key for context support.
+- Improve context with the collected successful responses.
+- Add file-based output with sorted permissions.

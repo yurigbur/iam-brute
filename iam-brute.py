@@ -54,7 +54,7 @@ def parse_arguments():
     parser.add_argument('--session-token', help='STS session token', default=None)
     parser.add_argument('--services', nargs='+', help='Space-sepearated list of services to enumerate', default=None) 
     parser.add_argument('--exclude-services', nargs='+', help='Space-sepearated list of excluded services (overwrites --services)', default=None) 
-    parser.add_argument('--verbose', help='Sets the level of information the script prints: "silent" only prints confirmed permissions, "warning" (default) prints parameter parsing errors and "debug" prints all errors', choices=["SILENT","WARNING","DEBUG"], default="WARNING")
+    parser.add_argument('--verbose', help='Sets the level of information the script prints: "SILENT" (default) only prints confirmed permissions, "WARNING" prints parameter errors and "DEBUG" prints infos for all requests', choices=["SILENT","WARNING","DEBUG"], default="SILENT")    
     parser.add_argument('--threads', help='Number of threads (Default 25)', type=int, default=25)
     parser.add_argument('--no-banner', help='Hides banner', action="store_true", default=False)
     parser.add_argument('--context', help='Path to a context file that is used to obtain parameters for the requests', default=None)
