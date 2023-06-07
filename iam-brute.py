@@ -1,32 +1,19 @@
 #!/usr/bin/env python
 
-import os
 import argparse
 import botocore
 import boto3
-import datetime
-import multiprocessing
-import re
-import requests
-import random
+#import datetime
+#import re
+#import random
 import json
 
 from multiprocessing import Manager, Process
-from itertools import repeat
-from enum import Enum
 
 from enumeration_worker import worker
-
-class LVL(Enum):
-    SILENT = 1
-    WARNING = 2
-    DEBUG = 3
+from util import util
 
 THREADS = 25
-REGION = "us-east-1"
-VERBOSE = LVL.WARNING.value
-CONN_TIMEOUT = 60
-READ_TIMEOUT = 60 
 
 BANNER = """
   _____            __  __   ____  _____  _    _ _______ ______   _ 
@@ -88,14 +75,14 @@ def parse_arguments():
         exit()
 
     return args
-    
 
-def generate_inital_queue(queue, profile, ak, sk, st, services, context):
+
+def generate_inital_queue(queue, profile, ak, sk, st, services):
 
     # Generate a list of service and action tuples for all list, get and describe actions
     count = 0
     for service in services:
-        client = boto3.client(service,region_name=REGION)
+        client = boto3.client(service,region_name=util.REGION)
         actions = filter(lambda action: not (action.startswith("__") or action.startswith("_")), dir(client))
         for action in actions:
             if action.startswith("get_") or action.startswith("list_") or action.startswith("describe_"):
@@ -114,16 +101,16 @@ def generate_inital_queue(queue, profile, ak, sk, st, services, context):
     print(f"[*] Checking {count} permissions\n")
 
 
-def enumerate_permissions(profile, ak, sk, st, services, context):
+def enumerate_permissions(profile, ak, sk, st, services, context, threads):
 
     with Manager() as manager:
         queue = manager.Queue()
         results = manager.Queue()
 
-        generate_inital_queue(queue, profile, ak, sk, st, services, context)
+        generate_inital_queue(queue, profile, ak, sk, st, services)
 
         try:
-            processes = [Process(target=worker.run, args=(queue,results))]
+            processes = [Process(target=worker.run, args=(queue,results,context)) for _ in range(threads)]
 
             for process in processes:
                 process.start()
@@ -144,17 +131,16 @@ def enumerate_permissions(profile, ak, sk, st, services, context):
 
 def main():
     args = parse_arguments()
-    global VERBOSE, THREADS
-    VERBOSE = LVL[args.verbose]
-    THREADS = args.threads
+    util.VERBOSE = util.LVL[args.verbose]
 
+    if not args.no_banner: 
+        print(BANNER)
+
+    # Load context if provided
     context = None
     if args.context:
         with open(args.context, "r") as fd:
             context = json.load(fd)
-
-    if not args.no_banner: 
-        print(BANNER)
         
     services = boto3.Session().get_available_services()
     if args.services:
@@ -166,16 +152,23 @@ def main():
         services = [x for x in services if x not in args.exclude_services]
 
     #Check that provided credentials are valid
-    # client = get_client('sts', args.profile, args.access_key, args.secret_key, args.session_token)
-    # try:
-    #     identity = client.get_caller_identity()
-    #     print(f"[*] Account ID: {identity['Account']}")
-    #     print(f"[*] Principal: {identity['Arn']}")
-    # except:
-    #     print("[!] Provided credentials are invalid")
-    #     exit()
+    client = util.get_client('sts', args.profile, args.access_key, args.secret_key, args.session_token)
+    try:
+        identity = client.get_caller_identity()
+        print(f"[*] Account ID: {identity['Account']}")
+        print(f"[*] Principal: {identity['Arn']}")
+    except:
+        print("[!] Provided credentials are invalid")
+        exit()
     
-    enumerate_permissions(args.profile, args.access_key, args.secret_key, args.session_token, services, context)
+    enumerate_permissions(
+        args.profile, 
+        args.access_key, 
+        args.secret_key, 
+        args.session_token, 
+        services, 
+        context,
+        args.threads)
 
 
 if __name__ == '__main__':
