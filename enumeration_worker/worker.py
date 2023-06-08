@@ -27,6 +27,7 @@ def run(queue, results, context):
                     val, 
                     client,
                     context,
+                    queue
                 )
 
                 if check:
@@ -39,7 +40,7 @@ def run(queue, results, context):
             except EOFError:
                 break
 
-        print(f"{val['service']}:{val['action']}")
+        #print(f"{val['service']}:{val['action']}")
 
 
 def get_context_param(service, param_name, context):
@@ -128,24 +129,27 @@ def check_permission(val, client, context, queue):
             response = method(**val['parameters'])
 
         else:
-            params_needed = False
             method = getattr(client, val['action'])
             response = method()
         
         util.write_output(util.LVL.DEBUG, str(response))
+
+        params = ("(" + ', '.join(val['parameters'].keys()) + ")") if val['parameters'] else ""
+        util.write_output(util.LVL.SILENT,f"[+] {val['service']}.{val['action']}: {params}")
+        return True
     
     except botocore.exceptions.ParamValidationError as param_error:
         
         # if param validation error occurs without parameters, the action requires some. 
         # The error message is used to infer the needed parameters.
         # If the error occurs with parameters the used parameters (context or static) are wrong.
+
         if val['parameters']:
             util.write_output(util.LVL.WARNING,f"[!] Cannot determine correct parameter format for {val['service']}.{val['action']}\n{str(param_error)}\n")
             return False
         else:
             parameter_error_list = str(param_error).split("\n")[1:]
             parameter_dict = dict()
-            params_needed = True
 
             # TODO add support for multiple values in the context
             for param_error_text in parameter_error_list:
@@ -180,8 +184,3 @@ def check_permission(val, client, context, queue):
         #remove error output for silent after error is resolved
         util.write_output(util.LVL.SILENT,f"[!] Cannot determine correct parameter format for {val['service']}.{val['action']}\n{str(key_error)}\n")
         return False
-    
-
-    params = ("(" + ', '.join(parameter_dict.keys()) + ")") if params_needed else ""
-    util.write_output(util.LVL.SILENT,f"[+] {val['service']}.{val['action']}: {params}")
-    return True
