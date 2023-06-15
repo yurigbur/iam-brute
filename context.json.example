@@ -7,6 +7,6 @@
 			"RoleName":["ping"]
 		}
 	},
-	"RoleName":["pong","foo",bar"], 
+	"RoleName":["pong","foo","bar"], 
 	"id":1337
 }
