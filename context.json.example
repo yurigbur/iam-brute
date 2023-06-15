@@ -1,12 +1,12 @@
 {
 	"services":{
 		"s3":{
-			"BucketName":"foobar"
+			"BucketName":["foobar"]
 		},
 		"iam":{
-			"RoleName":"ping"
+			"RoleName":["ping"]
 		}
 	},
-	"RoleName":"pong", 
+	"RoleName":["pong","foo",bar"], 
 	"id":1337
 }

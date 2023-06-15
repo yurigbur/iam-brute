@@ -1,7 +1,8 @@
 import botocore
 import boto3
-import datetime
-import time
+#import datetime
+#import time
+import itertools
 #import json
 #import re
 
@@ -14,6 +15,7 @@ def run(queue, results, context):
         else:
             try:
                 val = queue.get()
+                #print(val)
 
                 client = util.get_client(
                     val['service'],
@@ -34,65 +36,36 @@ def run(queue, results, context):
                     results.put({
                         "service":val['service'],
                         "action":val['action'],
-                        "parameters":val['action']
+                        "parameters":val['parameters']
                     })
                 
             except EOFError:
                 break
 
-        #print(f"{val['service']}:{val['action']}")
 
+def get_parameters(param_names, service, context):
 
-def get_context_param(service, param_name, context):
-    result = None
-    level = []
-    if "services" in context and service in list(context['services'].keys()): 
-        level = context['services'][service]
-    else:
-        level = context
-
-    for key in list(level.keys()):
-            if param_name.lower() == key.lower():
-                result = level[key]
+    all_params = list()
+    for p in param_names:
+        tmp_params = list()
+        if context:
+            tmp_params = tmp_params + util.get_context_params(p, service, context)
+        tmp_params.append(util.get_static_param(p, service))
+        #print(tmp_params)
+        all_params.append(tmp_params)
     
-    return result
-
-
-def get_parameter(param_name, service, context):
-    # Heuristical approach to choose a type of format that is required based on the parameter name
     
-    if context:
-        context_param = get_context_param(service, param_name, context)
-        if context_param:
-            return context_param
-    #Static rules
-    if "arn" in param_name.lower():
-        if "policy" in param_name.lower():
-            return "arn:aws:iam::aws:policy/foobar"
-        elif "role" in param_name.lower():
-            return "arn:aws:iam::000000000000:role/foobar"
-        else:
-            return f"arn:aws:{service}:{util.REGION}:000000000000:foobar"
-    if "version" in param_name.lower():
-        return "v123456789"
-    if param_name.lower().endswith("list") or param_name.lower().endswith("ids"):
-        return ["foo","bar"]
-    if "JobId" in param_name:
-        return "deadbeef-dead-beef-dead-beefdeadbeef"
-    if "time" in param_name.lower():
-        return datetime.datetime.now()
-    if "MaxResults" in param_name or "MaxEntries" in param_name:
-        return 42
-    if param_name.lower().endswith("count"):
-        return 42
-    if "InstanceId" in param_name:
-        return "i-deadbeefdeadbeefd"
-    if "repositoryName" in param_name:
-        return f"11122233334444.dkr.ecr.{util.REGION}.amazonaws.com/foobar"
-    else:
-        return "ABCDEFGHIJKLMNOPQRSTUVWXYZ" 
-    
+    all_combs = list(itertools.product(*all_params))
+    all_combs_as_dicts = []
+    for c in all_combs:
+        tmp_dict = dict()
+        for i in range(len(param_names)):
+            tmp_dict[param_names[i]] = c[i]
+        all_combs_as_dicts.append(tmp_dict)
 
+    return all_combs_as_dicts
+
+    
 def evaluate_client_error(service, action, error_response):
     if error_response['ResponseMetadata']['HTTPStatusCode'] in [403, 401]:
         util.write_output(util.LVL.DEBUG,f"[*] Access denied for {service}.{action}\n{str(error_response)}\n")
@@ -133,10 +106,6 @@ def check_permission(val, client, context, queue):
             response = method()
         
         util.write_output(util.LVL.DEBUG, str(response))
-
-        params = ("(" + ', '.join(val['parameters'].keys()) + ")") if val['parameters'] else ""
-        util.write_output(util.LVL.SILENT,f"[+] {val['service']}.{val['action']}: {params}")
-        return True
     
     except botocore.exceptions.ParamValidationError as param_error:
         
@@ -146,18 +115,18 @@ def check_permission(val, client, context, queue):
 
         if val['parameters']:
             util.write_output(util.LVL.WARNING,f"[!] Cannot determine correct parameter format for {val['service']}.{val['action']}\n{str(param_error)}\n")
-            return False
         else:
             parameter_error_list = str(param_error).split("\n")[1:]
-            parameter_dict = dict()
+            parameter_names = list()
 
-            # TODO add support for multiple values in the context
             for param_error_text in parameter_error_list:
-                param_name = param_error_text[38:-1] 
-                parameter_dict[param_name] = get_parameter(param_name, val['service'], context) 
-
-            val['parameters'] = parameter_dict
-            queue.put(val)
+                parameter_names.append(param_error_text[38:-1])
+                
+            parameter_list = get_parameters(parameter_names, val['service'], context) 
+            
+            for p in parameter_list:
+                val['parameters'] = p
+                queue.put(val)
 
         return False
         
@@ -184,3 +153,7 @@ def check_permission(val, client, context, queue):
         #remove error output for silent after error is resolved
         util.write_output(util.LVL.SILENT,f"[!] Cannot determine correct parameter format for {val['service']}.{val['action']}\n{str(key_error)}\n")
         return False
+
+    params = ("(" + ', '.join(val['parameters'].keys()) + ")") if val['parameters'] else ""
+    util.write_output(util.LVL.SILENT,f"[+] {val['service']}.{val['action']}: {params}")
+    return True

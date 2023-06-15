@@ -3,7 +3,7 @@
 import argparse
 import botocore
 import boto3
-#import datetime
+import time
 #import re
 #import random
 import json
@@ -52,26 +52,32 @@ def parse_arguments():
     parser.add_argument('--access-key', help='AWS access key', default=None)
     parser.add_argument('--secret-key', help='AWS secret key', default=None)
     parser.add_argument('--session-token', help='STS session token', default=None)
+    parser.add_argument('--region', help='Region to test permissions against (Default us-east-1)', default="us-east-1")
     parser.add_argument('--services', nargs='+', help='Space-sepearated list of services to enumerate', default=None) 
     parser.add_argument('--exclude-services', nargs='+', help='Space-sepearated list of excluded services (overwrites --services)', default=None) 
     parser.add_argument('--verbose', help='Sets the level of information the script prints: "SILENT" (default) only prints confirmed permissions, "WARNING" prints parameter errors and "DEBUG" prints infos for all requests', choices=["SILENT","WARNING","DEBUG"], default="SILENT")    
     parser.add_argument('--threads', help='Number of threads (Default 25)', type=int, default=25)
     parser.add_argument('--no-banner', help='Hides banner', action="store_true", default=False)
-    parser.add_argument('--context', help='Path to a context file that is used to obtain parameters for the requests', default=None)
+    parser.add_argument('--context', help='relativ path to a context file that is used to obtain parameters for the requests', default=None)
+    parser.add_argument('--output', help='relativ path to the output file', default=None)
+    parser.add_argument('--output-format', help='format of the output', choices=["json", "text"], default="text")
 
     args = parser.parse_args()
 
     if args.profile and args.access_key:
-        print("[!] Access key and profile used")
+        util.write_output(util.LVL.SILENT,f"[!] Access key and profile used")
         exit()
     if args.access_key and not args.secret_key:
-        print("[!] Access key used without secret key")
+        util.write_output(util.LVL.SILENT,f"[!] Access key used without secret key")
         exit()
     if args.secret_key and not args.access_key:
-        print("[!] Secret key provided without access key")
+        util.write_output(util.LVL.SILENT,f"[!] Secret key provided without access key")
         exit()
     if args.session_token and not args.access_key and not args.secret_key:
-        print("[!] Session token without access key and secret key provided")
+        util.write_output(util.LVL.SILENT,f"[!] Session token without access key and secret key provided")
+        exit()
+    if args.region not in util.AVAILABLE_REGIONS:
+        util.write_output(util.LVL.SILENT,f"[!] Region identifier not a valid. Choose one of the following:\n{', '.join(util.AVAILABLE_REGIONS)}")
         exit()
 
     return args
@@ -126,12 +132,20 @@ def enumerate_permissions(profile, ak, sk, st, services, context, threads):
             print("[*] Keyboard Interrupt detected")
             for p in processes:
                 p.kill()
-            exit()
+
+        results_list = list()
+        while True:
+            if results.empty():
+                break
+            results_list.append(results.get())
+            
+        return results_list
     
 
 def main():
     args = parse_arguments()
     util.VERBOSE = util.LVL[args.verbose]
+    util.REGION = args.region
 
     if not args.no_banner: 
         print(BANNER)
@@ -161,7 +175,7 @@ def main():
         print("[!] Provided credentials are invalid")
         exit()
     
-    enumerate_permissions(
+    results_list = enumerate_permissions(
         args.profile, 
         args.access_key, 
         args.secret_key, 
@@ -169,6 +183,9 @@ def main():
         services, 
         context,
         args.threads)
+    
+    if args.output:
+        util.write_output_file(args.output, args.output_format, results_list, services)
 
 
 if __name__ == '__main__':
