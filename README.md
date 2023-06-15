@@ -60,22 +60,23 @@ sudo docker run -it yukonsec/iam-brute
 ### Misleading Outputs
 Some permissions always seem to return 200 status codes. If you encounter, one of the following outputs, they might not be very interesting.
 ```
-[+] elasticbeanstalk.list_available_solution_stacks: 
-[+] elasticbeanstalk.list_platform_versions: 
 [+] dynamodb.describe_endpoints: 
-[+] elasticbeanstalk.describe_application_versions: 
 [+] elasticbeanstalk.describe_applications: 
+[+] elasticbeanstalk.describe_application_versions: 
 [+] elasticbeanstalk.describe_environments: 
 [+] elasticbeanstalk.describe_events: 
-[+] kinesis-video-archived-media.get_dash_streaming_session_url: 
+[+] elasticbeanstalk.list_available_solution_stacks: 
+[+] elasticbeanstalk.list_platform_versions: 
 [+] kinesis-video-archived-media.get_hls_streaming_session_url: 
+[+] kinesis-video-archived-media.get_dash_streaming_session_url: 
 [+] kinesis-video-archived-media.list_fragments: 
-[+] kinesis-video-signaling.get_ice_server_config: (ChannelARN)
 [+] route53.get_checker_ip_ranges: 
 [+] route53.get_geo_location: 
 [+] route53.list_geo_locations: 
+[+] serverlessrepo.list_applications: 
 [+] sts.get_caller_identity: 
 [+] sts.get_session_token: 
+[+] kinesis-video-signaling.get_ice_server_config: (ChannelARN)
 ```
 
 ### Context Support
