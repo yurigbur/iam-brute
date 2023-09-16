@@ -31,7 +31,10 @@ def get_client(service, profile, ak, sk, st):
     if profile:
         # Workaround via the environment variable as clients without a session do not support profile names as parameters.
         os.environ["AWS_PROFILE"]=profile
-        return boto3.client(service, region_name=REGION, config=config)
+        try:
+            return boto3.client(service, region_name=REGION, config=config)
+        except botocore.exceptions.ProfileNotFound:
+            write_output(LVL.SILENT, f"[!] Profile \"{profile}\" not found!")
     elif ak:
         if not st:
             return boto3.client(service, aws_access_key_id=ak, aws_secret_access_key=sk, region_name=REGION, config=config)
