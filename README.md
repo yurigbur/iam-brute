@@ -52,11 +52,6 @@ options:
 ```
 
 
-### Docker (only updated on versioned releases)
-```bash
-sudo docker run -it yukonsec/iam-brute 
-```
-
 ### Misleading Outputs
 Some permissions always seem to return 200 status codes. If you encounter, one of the following outputs, they might not be very interesting.
 ```
@@ -91,6 +86,8 @@ I started writing this tool as I was frustrated with the coverage and maintenanc
 
 ### Roadmap / Ideas
 - Include permissions besides get, list and describe with dry-runs if available
+- Add static check to request attached and inline policies for role, user, group to avoid brute forcing if not necessary. 
 - Increase the dynamic parameter generation success rate by identifying re-occuring patterns and use fitting dummy parameters. 
 - Re-write Logging / Live Output with an acutal Logging library.
 - Improve context with the collected successful responses.
+- Add support for other Cloud Providers (GCP, Azure)
