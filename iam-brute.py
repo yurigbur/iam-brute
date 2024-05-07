@@ -8,7 +8,7 @@ import time
 #import random
 import json
 
-from multiprocessing import Manager, Process
+from multiprocessing import Manager, Process, Pipe
 
 from enumeration_worker import worker
 from util import util
@@ -112,27 +112,34 @@ def enumerate_permissions(profile, ak, sk, st, services, context, threads):
     with Manager() as manager:
         queue = manager.Queue()
         results = manager.Queue()
+        status = manager.Queue()
 
         generate_inital_queue(queue, profile, ak, sk, st, services)
 
         try:
-            processes = [Process(target=worker.run, args=(queue,results,context)) for _ in range(threads)]
+            workers = []
+            active_worker = {}
+            for wid in range(threads):
+                p = Process(target=worker.run, args=(queue,results,status,wid,context))
+                workers.append(p)
+                active_worker[wid] = True
+                p.start()
+            
+            while any(active_worker.values()) or not queue.empty() or not status.empty():
+                if not status.empty():
+                    wid, wstat = status.get()
+                    #print(wid)
+                    #print(wstat)
+                    if wstat is None:
+                        active_worker[wid] = False
 
-            for process in processes:
-                process.start()
-
-            #TODO fix race condition if queue is (temporarly) empty but a process is still handling the last queue elements. 
-            #Use less threads than the number of permissions, otherwise all processes will immideately be killed. 
-            while True:
-                if queue.empty():
-                    break
-
-            for process in processes:
-                process.kill()
+            #print("all tasks done")
+            for p in workers:
+                p.kill()
 
         except KeyboardInterrupt:
             print("[*] Keyboard Interrupt detected")
-            for p in processes:
+            for p in workers:
                 p.kill()
 
         results_list = list()

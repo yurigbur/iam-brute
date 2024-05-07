@@ -8,15 +8,26 @@ import itertools
 
 from util import util
 
-def run(queue, results, context):
+def run(queue, results, status, wid, context):
+    """
+    Runs a worker task that checks if the provided action can be performed on AWS with the given credentials
+
+    :param queue: Multiprocessing queue containing input objects consiting of service, action and aws credentials
+    :param results: Multiprocessing queue to store the result and hand it back to the main task
+    :param status: Multiprocessing status queue to let the main process know if the worker is ideling
+    :param wid: Worker ID
+    """
+    idle_sent = False
     while True:
         if queue.empty():
-            #Wait for a few miliseconds to see if queue recieves ne elements. Processes should only be terminated by watchdog if all processes are done.
-            time.sleep(0.1)
-            continue
+            if not idle_sent:
+                status.put((wid,None))
+                idle_sent = True
         else:
             try:
                 val = queue.get()
+                status.put((wid,f"{val['service']}.{val['action']}"))
+                idle_sent = False
                 #print(val)
 
                 client = util.get_client(
@@ -41,7 +52,8 @@ def run(queue, results, context):
                         "parameters":val['parameters']
                     })
                 
-            except EOFError:
+            except EOFError as e:
+                print(str(e))
                 continue
 
 
