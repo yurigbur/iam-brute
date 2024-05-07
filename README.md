@@ -56,22 +56,28 @@ options:
 Some permissions always seem to return 200 status codes. If you encounter, one of the following outputs, they might not be very interesting.
 ```
 [+] dynamodb.describe_endpoints: 
-[+] elasticbeanstalk.describe_applications: 
 [+] elasticbeanstalk.describe_application_versions: 
-[+] elasticbeanstalk.describe_environments: 
+[+] elasticbeanstalk.describe_applications: 
 [+] elasticbeanstalk.describe_events: 
-[+] elasticbeanstalk.list_available_solution_stacks: 
 [+] elasticbeanstalk.list_platform_versions: 
-[+] kinesis-video-archived-media.get_hls_streaming_session_url: 
+[+] elasticbeanstalk.describe_environments: 
+[+] elasticbeanstalk.list_available_solution_stacks: 
 [+] kinesis-video-archived-media.get_dash_streaming_session_url: 
+[+] kinesis-video-archived-media.get_hls_streaming_session_url: 
 [+] kinesis-video-archived-media.list_fragments: 
-[+] route53.get_checker_ip_ranges: 
+[+] omics.list_variant_stores: 
 [+] route53.get_geo_location: 
+[+] route53.get_checker_ip_ranges: 
 [+] route53.list_geo_locations: 
 [+] serverlessrepo.list_applications: 
-[+] sts.get_caller_identity: 
 [+] sts.get_session_token: 
+[+] sts.get_caller_identity: 
+[+] bedrock.get_provisioned_model_throughput: (provisionedModelId)
+[+] kinesis-video-archived-media.get_images: (ImageSelectorType, StartTimestamp, EndTimestamp, Format)
 [+] kinesis-video-signaling.get_ice_server_config: (ChannelARN)
+[+] omics.get_variant_store: (name)
+[+] omics.list_annotation_store_versions: (name)
+[+] sqs.list_message_move_tasks: (SourceArn)
 ```
 
 ### Context Support
@@ -90,4 +96,6 @@ I started writing this tool as I was frustrated with the coverage and maintenanc
 - Increase the dynamic parameter generation success rate by identifying re-occuring patterns and use fitting dummy parameters. 
 - Re-write Logging / Live Output with an acutal Logging library.
 - Improve context with the collected successful responses.
+- Add signaling of child processes through Pipes to not accidentially killing processes while queue may re-fil through found parameters.
+- Evaluate omics service false positives
 - Add support for other Cloud Providers (GCP, Azure)

@@ -121,6 +121,8 @@ def enumerate_permissions(profile, ak, sk, st, services, context, threads):
             for process in processes:
                 process.start()
 
+            #TODO fix race condition if queue is (temporarly) empty but a process is still handling the last queue elements. 
+            #Use less threads than the number of permissions, otherwise all processes will immideately be killed. 
             while True:
                 if queue.empty():
                     break

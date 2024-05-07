@@ -1,7 +1,7 @@
 import botocore
 import boto3
 #import datetime
-#import time
+import time
 import itertools
 #import json
 #import re
@@ -11,7 +11,9 @@ from util import util
 def run(queue, results, context):
     while True:
         if queue.empty():
-            break
+            #Wait for a few miliseconds to see if queue recieves ne elements. Processes should only be terminated by watchdog if all processes are done.
+            time.sleep(0.1)
+            continue
         else:
             try:
                 val = queue.get()
@@ -40,7 +42,7 @@ def run(queue, results, context):
                     })
                 
             except EOFError:
-                break
+                continue
 
 
 def get_parameters(param_names, service, context):
@@ -141,12 +143,25 @@ def check_permission(val, client, context, queue):
         return False
 
     except botocore.exceptions.EndpointConnectionError as endpoint_error:
-        util.write_output(util.LVL.WARNING,f"[*] Endpoint connection error for: {val['service']}.{val['action']}\n{str(endpoint_error)}\n")
+        util.write_output(util.LVL.WARNING,f"[!] Endpoint connection error for: {val['service']}.{val['action']}\n{str(endpoint_error)}\n")
         return False
     
     except botocore.exceptions.EndpointResolutionError as endpoint_resolution_error:
         util.write_output(util.LVL.WARNING,f"[!] Cannot determine correct parameter for {val['service']}.{val['action']}\n{str(endpoint_resolution_error)}\n")
         return False
+
+    except botocore.exceptions.ConnectTimeoutError as connect_timeout_error:
+        util.write_output(util.LVL.WARNING,f"[!] Cannot connect to service endpoint for {val['service']}.{val['action']}\n{str(connect_timeout_error)}\n")
+        return False
+
+    except botocore.exceptions.ReadTimeoutError as read_timeout_error:
+        util.write_output(util.LVL.WARNING,f"[!] Connection timeout for {val['service']}.{val['action']}\n{str(read_timeout_error)}\n")
+        return False
+
+    except botocore.exceptions.SSLError as ssl_error:
+        #TODO analyze why there are SSL errors for legitimate endpoints. This is a boto / aws issue not issue of the tool. 
+        util.write_output(util.LVL.SILENT,f"[!] SSL issue for {val['service']}.{val['action']}\n{str(read_timeout_error)}\nThis is likely a boto/aws issue, not an issue with the setup.")
+        return False  
 
     #TODO extract missing parmaters from key error and re-do check similar to ParamValidationError
     except KeyError as key_error:

@@ -46,7 +46,7 @@ def get_client(service, profile, ak, sk, st):
 
 
 def get_static_param(param_name, service):
-    #Static rules
+    #Static rules to fullfill format requirements. These will not be of any use for actually enumerating permissons
     if "arn" in param_name.lower():
         if "policy" in param_name.lower():
             return "arn:aws:iam::aws:policy/foobar"
@@ -70,6 +70,8 @@ def get_static_param(param_name, service):
         return "i-deadbeefdeadbeefd"
     if "repositoryName" in param_name:
         return f"11122233334444.dkr.ecr.{REGION}.amazonaws.com/foobar"
+    if "CategoryId" in param_name:
+        return 42
     else:
         return "ABCDEFGHIJKLMNOPQRSTUVWXYZ" 
     
